@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite this repository and the associated manuscript."
+title: "Gowa Rice-Field Methane Mitigation Potential (MMPI) — Reproducibility Code"
+type: software
+version: 1.0.0
+date-released: 2026-08-15
+license: MIT
+repository-code: "https://github.com/firmancess/gowa-methane-mitigation-mmpi"
+authors:
+  - family-names: Syakur
+    given-names: Ahmad
+    orcid: "https://orcid.org/0009-0005-2580-2258"
+  - family-names: Ashari
+    given-names: Ahmad Firman
+    orcid: "https://orcid.org/0009-0002-0040-0701"
+  - family-names: Risal
+    given-names: Darmawan
+    orcid: "https://orcid.org/0000-0003-0924-9817"
+  - family-names: Alam
+    given-names: Muhammad Nur
+    orcid: "https://orcid.org/0000-0002-7006-5809"
+  - family-names: Ashar
+    given-names: Zulfardi
+    orcid: "https://orcid.org/0009-0007-9136-4932"
