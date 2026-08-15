@@ -1,0 +1,71 @@
+Analysis - Accuracy assessment results
+
+Thematic map:
+Gowa_RF_2026_Rice_NonRice_AcATaMa_2Classes_10m.tif
+
+Sampling file:
+stratified sampling_baru.gpkg
+
+Estimator:
+Stratified estimator
+
+Response design state:
+400/400 samples labeled
+
+1) Error matrix:
+;;Validation
+;;1 (Non-Rice);2 (Rice);Total;User's accuracy;Total class area (m²);Wi
+Thematic map;1;324;18;342;0.94737;1543089900.0;0.85536
+;2;0;58;58;1.0;260933900.0;0.14464
+;total;324;76;400;;1804023800.0
+;Producer's accuracy;1.0;0.76263;;0.95498
+
+2) Accuracy:
+
+Overall:
+;Overall Accuracy;Standard deviation
+;0.95498;0.01034
+
+User:
+;User's Accuracy;Standard deviation
+1 (Non-Rice);0.94737;0.01209
+2 (Rice);1.0;0.0
+
+Producer:
+;Producer's Accuracy;Standard deviation
+1 (Non-Rice);1.0;0.0
+2 (Rice);0.76263;0.03733
+
+2b) Accuracy matrix of estimated area proportion:
+
+User:
+;;Validation
+;;1 (Non-Rice);2 (Rice)
+Thematic map;1;0.94737;0.05263
+;2;-;1.0
+
+Producer:
+;;Validation
+;;1 (Non-Rice);2 (Rice)
+Thematic map;1;1.0;0.23737
+;2;-;0.76263
+
+3) Error matrix of estimated area proportion:
+;;Validation
+;;1 (Non-Rice);2 (Rice);Wi
+Thematic map;1;0.81034;0.04502;0.85536
+;2;-;0.14464;0.14464
+;total;0.81034;0.18966
+
+4) Quadratic error matrix of estimated area proportion:
+;;Validation
+;;1 (Non-Rice);2 (Rice)
+Thematic map;1;0.00011;0.00011
+;2;-;-
+;total;0.01034;0.01034
+
+5) Class area adjusted:
+;Area adjusted (m²);Error;Lower limit;Upper limit;Coefficient of variation;Uncertainty
+1 (Non-Rice);1461874642.10526;18659357.72472;1425302300.96482;1498446983.24571;1.28 %;0.02502
+2 (Rice);342149157.89474;18659357.72472;305576816.75429;378721499.03518;5.45 %;0.10689
+total;1804023800.0
