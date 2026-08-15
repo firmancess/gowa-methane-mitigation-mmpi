@@ -134,7 +134,7 @@ SEARCH_ROOTS_COMPONENTS = [
     if os.path.exists(p)
 ]
 
-print("\nFolder pencarian komponen:")
+print("\nComponent search folders:")
 for p in SEARCH_ROOTS_COMPONENTS:
     print("-", p)
 
@@ -201,9 +201,9 @@ def find_raster_grid(patterns, label, ref_shape=None, ref_crs=None, ref_transfor
 
     if len(candidates) == 0:
         raise FileNotFoundError(
-            f"{label} tidak ditemukan.\n"
-            f"Pola pencarian: {patterns}\n\n"
-            "Folder yang dicari:\n" + "\n".join(SEARCH_ROOTS_COMPONENTS)
+            f"{label} was not found.\n"
+            f"Search patterns: {patterns}\n\n"
+            "Search folders:\n" + "\n".join(SEARCH_ROOTS_COMPONENTS)
         )
 
     if ref_shape is not None:
@@ -235,8 +235,8 @@ def find_raster_grid(patterns, label, ref_shape=None, ref_crs=None, ref_transfor
             )
 
             raise FileNotFoundError(
-                f"{label} ditemukan, tetapi tidak ada yang grid-nya sama dengan MMPI final.\n"
-                f"Cek file kandidat di folder Tables."
+                f"{label} were found, but none matches the final MMPI grid.\n"
+                f"Check the candidate-file diagnostics in the Tables folder."
             )
 
         selected = candidates_same_grid[0]
@@ -264,11 +264,11 @@ def read_binary_mask(path):
 
     arr[~np.isfinite(arr)] = np.nan
 
-    # Perlindungan jika ada nilai 255 sebagai nodata tetapi tidak terbaca sebagai nodata
+    # Safeguard for value 255 when it represents NoData but is not encoded as raster NoData
     vals = arr[np.isfinite(arr)]
 
     if vals.size == 0:
-        raise ValueError(f"Raster kosong: {path}")
+        raise ValueError(f"Raster is empty: {path}")
 
     unique_small = np.unique(vals)
     unique_small = unique_small[:20]
@@ -278,11 +278,11 @@ def read_binary_mask(path):
         vals = arr[np.isfinite(arr)]
 
     if vals.size == 0:
-        raise ValueError(f"Raster kosong setelah pembersihan nodata: {path}")
+        raise ValueError(f"Raster is empty after NoData cleaning: {path}")
 
     vmax = np.nanmax(vals)
 
-    # Probabilitas 0-1
+    # Probability range 0-1
     if vmax <= 1.0:
         mask = np.where(arr >= 0.5, 1.0, np.nan)
     else:
@@ -445,7 +445,7 @@ def find_best_rice_mask():
         index=False
     )
 
-    print("\nTop kandidat mask sawah:")
+    print("\nTop rice-mask candidates:")
     print(df.head(15)[["file", "area_ha", "score", "path"]].to_string(index=False))
 
     best_path = df.iloc[0]["path"]
@@ -550,7 +550,7 @@ boundary_candidates += glob.glob(
 boundary_candidates = sorted(list(set([p for p in boundary_candidates if os.path.exists(p)])))
 
 if len(boundary_candidates) == 0:
-    raise FileNotFoundError("Batas Gowa tidak ditemukan.")
+    raise FileNotFoundError("Gowa boundary was not found.")
 
 BOUNDARY_PATH = boundary_candidates[0]
 print("\nGowa boundary:", BOUNDARY_PATH)
@@ -699,7 +699,7 @@ UNCERT, _, _, _, _ = read_raster_float(UNCERT_PATH)
 best_rice_path, best_rice_area = find_best_rice_mask()
 
 if best_rice_path is None:
-    print("\nMask sawah RF tidak ditemukan. Figure 1 memakai valid MMPI mask sebagai fallback.")
+    print("\nThe RF rice mask was not found. Figure 1 uses the valid MMPI mask as a fallback.")
     rice_fig1_mask = np.where(valid_mask, 1.0, np.nan)
     rice_fig1_extent = raster_extent
     rice_fig1_crs = crs
@@ -708,13 +708,13 @@ if best_rice_path is None:
 else:
     diff_pct = abs(best_rice_area - EXPECTED_RICE_AREA_HA) / EXPECTED_RICE_AREA_HA * 100
 
-    print("\nMask sawah terpilih:")
+    print("\nSelected rice mask:")
     print(best_rice_path)
-    print("Luas kandidat ha:", round(best_rice_area, 2))
-    print("Selisih dari target %:", round(diff_pct, 2))
+    print("Candidate area (ha):", round(best_rice_area, 2))
+    print("Difference from target (%):", round(diff_pct, 2))
 
     if diff_pct > 35:
-        print("\nLuas kandidat terlalu jauh. Figure 1 memakai valid MMPI mask sebagai fallback.")
+        print("\nCandidate area is too far from the expected value. Figure 1 uses the valid MMPI mask as a fallback.")
         rice_fig1_mask = np.where(valid_mask, 1.0, np.nan)
         rice_fig1_extent = raster_extent
         rice_fig1_crs = crs
@@ -750,12 +750,12 @@ admin_extent_fig1 = get_admin_extent(gowa_admin_fig1, buffer_m=1200)
 # 10. CLASSIFICATION FROM FINAL MMPI
 # ============================================================
 
-ABS_CLASS = np.full(MMPI.shape, np.nan, dtype="float32")
-ABS_CLASS[(MMPI >= 0) & (MMPI < 20) & valid_mask] = 1
-ABS_CLASS[(MMPI >= 20) & (MMPI < 40) & valid_mask] = 2
-ABS_CLASS[(MMPI >= 40) & (MMPI < 60) & valid_mask] = 3
-ABS_CLASS[(MMPI >= 60) & (MMPI < 80) & valid_mask] = 4
-ABS_CLASS[(MMPI >= 80) & (MMPI <= 100) & valid_mask] = 5
+FIXED_SCORE_CLASS = np.full(MMPI.shape, np.nan, dtype="float32")
+FIXED_SCORE_CLASS[(MMPI >= 0) & (MMPI < 20) & valid_mask] = 1
+FIXED_SCORE_CLASS[(MMPI >= 20) & (MMPI < 40) & valid_mask] = 2
+FIXED_SCORE_CLASS[(MMPI >= 40) & (MMPI < 60) & valid_mask] = 3
+FIXED_SCORE_CLASS[(MMPI >= 60) & (MMPI < 80) & valid_mask] = 4
+FIXED_SCORE_CLASS[(MMPI >= 80) & (MMPI <= 100) & valid_mask] = 5
 
 q20, q40, q60, q80 = np.nanpercentile(MMPI[valid_mask], [20, 40, 60, 80])
 
@@ -1005,13 +1005,13 @@ save_fig(
 
 # ============================================================
 # FIGURE 4
-# ABSOLUTE MMPI CLASS AND RELATIVE PRIORITY CLASS
+# FIXED-SCORE MMPI CLASS AND RELATIVE PRIORITY CLASS
 # ============================================================
 
 fig, axes = plt.subplots(1, 2, figsize=(12.4, 7.4))
 
 class_maps = [
-    ("(a) Absolute MMPI class", ABS_CLASS),
+    ("(a) Fixed-score MMPI class", FIXED_SCORE_CLASS),
     ("(b) Relative priority class", REL_CLASS),
 ]
 
@@ -1076,7 +1076,7 @@ fig.subplots_adjust(
 
 save_fig(
     fig,
-    "04_Absolute_MMPI_Class_and_Relative_Priority_Class_DPI600.png",
+    "04_Fixed_Score_MMPI_Class_and_Relative_Priority_Class_DPI600.png",
     pad=0.06
 )
 
@@ -1089,7 +1089,7 @@ save_fig(
 abs_rows = []
 
 for k in [1, 2, 3, 4, 5]:
-    m = (ABS_CLASS == k) & valid_mask
+    m = (FIXED_SCORE_CLASS == k) & valid_mask
     n_pix = int(np.sum(m))
     area_ha = n_pix * 0.09
 
@@ -1120,7 +1120,7 @@ for k in [1, 2, 3, 4, 5]:
 rel_df = pd.DataFrame(rel_rows)
 
 abs_df.to_csv(
-    os.path.join(TABLE_DIR, "Area_by_absolute_MMPI_class_final.csv"),
+    os.path.join(TABLE_DIR, "Area_by_fixed_score_MMPI_class_final.csv"),
     index=False
 )
 
@@ -1142,7 +1142,7 @@ bars = ax.bar(
 )
 
 ax.set_title(
-    "(a) Area by absolute MMPI class",
+    "(a) Area by fixed-score MMPI class",
     fontsize=11,
     fontweight="bold",
     pad=13
@@ -1348,12 +1348,12 @@ figure_index = pd.DataFrame([
     },
     {
         "Figure": "Figure 4",
-        "Caption": "Absolute MMPI class and relative priority class.",
-        "File": "04_Absolute_MMPI_Class_and_Relative_Priority_Class_DPI600.png"
+        "Caption": "Fixed-score MMPI class and relative priority class.",
+        "File": "04_Fixed_Score_MMPI_Class_and_Relative_Priority_Class_DPI600.png"
     },
     {
         "Figure": "Figure 5",
-        "Caption": "Area distribution by absolute MMPI class and mean MMPI score by relative priority class.",
+        "Caption": "Area distribution by fixed-score MMPI class and mean MMPI score by relative priority class.",
         "File": "05_Area_Distribution_and_Mean_MMPI_by_Class_DPI600.png"
     },
     {
@@ -1371,9 +1371,9 @@ index_path = os.path.join(
 figure_index.to_csv(index_path, index=False)
 
 print("\n============================================================")
-print("FINAL VISUALIZATION SCRIPT SELESAI")
-print("Semua gambar tersimpan di:")
+print("FINAL VISUALIZATION SCRIPT COMPLETED")
+print("All figures were saved in:")
 print(FIG_DIR)
-print("\nIndex figure:")
+print("\nFigure index:")
 print(index_path)
 print("============================================================")

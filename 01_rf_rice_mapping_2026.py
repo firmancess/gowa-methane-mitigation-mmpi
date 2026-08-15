@@ -10,21 +10,21 @@ Superseded/failed notebook cells were intentionally excluded.
 
 # ============================================================
 # RANDOM FOREST CLASSIFICATION
-# SAWAH GOWA 2026 BERBASIS SENTINEL-1 + SENTINEL-2
-# FIXED UNTUK GEE EXPORT YANG TERPECAH MENJADI TILE
+# GOWA RICE-FIELD MAPPING 2026 BASED ON SENTINEL-1 + SENTINEL-2
+# FINAL VERSION FOR GEE EXPORTS SPLIT INTO TILES
 # ============================================================
 
 # ============================================================
-# 0. INSTALL LIBRARY
+# 0. INSTALL LIBRARIES
 # ============================================================
 
 
-# Install GDAL command line untuk membuat VRT mosaic
+# Install the GDAL command-line utility used to build a VRT mosaic
 
 
 
 # ============================================================
-# 1. IMPORT LIBRARY
+# 1. IMPORT LIBRARIES
 # ============================================================
 
 import os
@@ -71,18 +71,18 @@ except Exception:
 
 
 # ============================================================
-# 2. SETTING FOLDER
+# 2. FOLDER SETTINGS
 # ============================================================
 
 DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
 
-# Folder hasil download dari Google Earth Engine
+# Folder containing downloads from Google Earth Engine
 SENTINEL_DIR = os.path.join(
     DRIVE_ROOT,
     "Gowa_Sentinel_2026_RF_Input"
 )
 
-# Folder output klasifikasi
+# Classification output folder
 OUT_DIR = os.path.join(
     DRIVE_ROOT,
     "Gowa_Rice_RF_Classification_2026"
@@ -96,27 +96,27 @@ FIG_DIR = os.path.join(
 os.makedirs(OUT_DIR, exist_ok=True)
 os.makedirs(FIG_DIR, exist_ok=True)
 
-# Nama RF stack utama dari GEE
+# Main RF-stack filename exported from GEE
 RF_STACK_SINGLE_PATH = os.path.join(
     SENTINEL_DIR,
     "Gowa_Sentinel_2026_RF_Input_Stack_10m.tif"
 )
 
-# Pola file tile jika export GEE terpecah
+# Tile filename pattern when a GEE export is split
 RF_STACK_TILE_PATTERN = os.path.join(
     SENTINEL_DIR,
     "Gowa_Sentinel_2026_RF_Input_Stack_10m-*.tif"
 )
 
-# Mask sawah 2024 sebagai positive training seed
-SAWAH_2024_MASK_PATH = os.path.join(
+# 2024 rice mask used as the positive training seed
+RICE_2024_MASK_PATH = os.path.join(
     DRIVE_ROOT,
     "MMPI_Gowa_Analysis_Output_30m",
     "Sawah_2024_Mamminasata_Gowa_FINAL",
     "05_Sawah_2024_Gowa_binary_mask_aligned_to_MMPI_30m.tif"
 )
 
-# Fallback jika mask final tidak ditemukan
+# Fallback if the final mask is not found
 SAWAH_2024_ORIGINAL_PATH = os.path.join(
     DRIVE_ROOT,
     "InputTiff",
@@ -126,11 +126,11 @@ SAWAH_2024_ORIGINAL_PATH = os.path.join(
 print("Folder Sentinel :", SENTINEL_DIR)
 print("Output          :", OUT_DIR)
 print("RF stack single :", RF_STACK_SINGLE_PATH)
-print("Mask sawah 2024 :", SAWAH_2024_MASK_PATH)
+print("2024 rice mask :", RICE_2024_MASK_PATH)
 
 
 # ============================================================
-# 3. PARAMETER ANALISIS
+# 3. ANALYSIS PARAMETERS
 # ============================================================
 
 RANDOM_SEED = 2026
@@ -152,7 +152,7 @@ print("Random seed:", RANDOM_SEED)
 
 
 # ============================================================
-# 4. FUNGSI UMUM
+# 4. GENERAL FUNCTIONS
 # ============================================================
 
 def find_file(root, patterns):
@@ -175,13 +175,13 @@ def find_file(root, patterns):
 def find_first_file(root, patterns, required=True, label="file"):
     files = find_file(root, patterns)
 
-    print(f"\nKandidat {label}:")
+    print(f"\nCandidate {label}:")
     for f in files[:20]:
         print("-", f)
 
     if len(files) == 0:
         if required:
-            raise FileNotFoundError(f"{label} tidak ditemukan.")
+            raise FileNotFoundError(f"{label} was not found.")
         else:
             return None
 
@@ -190,18 +190,18 @@ def find_first_file(root, patterns, required=True, label="file"):
 
 def build_vrt_from_tiles(tile_files, vrt_path):
     """
-    Membuat VRT mosaic dari export GEE yang terpecah menjadi beberapa tile.
-    VRT tidak menggandakan data, hanya membuat referensi mosaic.
+    Build a VRT mosaic from a GEE export that was split into multiple tiles.
+    The VRT does not duplicate data; it only creates a mosaic reference.
     """
 
     if len(tile_files) == 0:
-        raise FileNotFoundError("Tidak ada tile RF stack untuk dibuat VRT.")
+        raise FileNotFoundError("No RF-stack tiles were found for VRT creation.")
 
     gdalbuildvrt_path = "/usr/bin/gdalbuildvrt"
 
     if not os.path.exists(gdalbuildvrt_path):
         raise FileNotFoundError(
-            "gdalbuildvrt belum tersedia. Pastikan gdal-bin sudah terinstall."
+            "gdalbuildvrt is unavailable. Ensure that gdal-bin is installed."
         )
 
     tile_list_path = vrt_path.replace(".vrt", "_tile_list.txt")
@@ -218,8 +218,8 @@ def build_vrt_from_tiles(tile_files, vrt_path):
         vrt_path
     ]
 
-    print("\nMembuat VRT mosaic dari tile RF stack...")
-    print("Jumlah tile:", len(tile_files))
+    print("\nBuilding a VRT mosaic from RF-stack tiles...")
+    print("Number of tiles:", len(tile_files))
     print("VRT path:", vrt_path)
 
     result = subprocess.run(
@@ -233,18 +233,18 @@ def build_vrt_from_tiles(tile_files, vrt_path):
 
     if result.returncode != 0:
         print(result.stderr)
-        raise RuntimeError("Gagal membuat VRT RF stack.")
+        raise RuntimeError("Failed to build the RF-stack VRT.")
 
     if not os.path.exists(vrt_path):
-        raise FileNotFoundError("VRT gagal dibuat.")
+        raise FileNotFoundError("VRT creation failed.")
 
     return vrt_path
 
 
 def expected_rf_band_names_75():
     """
-    Fallback nama band jika VRT kehilangan band description.
-    Sesuai urutan rfStack dari script GEE:
+    Fallback band names if the VRT loses band descriptions.
+    Matches the rfStack order used in the GEE script:
     s2Median + s2Temporal + s1Stats + Q1 + Q2 + Q3_partial.
     """
 
@@ -306,7 +306,7 @@ def get_band_names(src, fallback_tile=None):
         else:
             names.append(str(desc))
 
-    # Jika VRT kehilangan nama band, coba baca nama band dari tile pertama
+    # If the VRT loses band names, try reading band names from the first tile
     names_are_generic = all(
         name.startswith("band_") for name in names
     )
@@ -331,7 +331,7 @@ def get_band_names(src, fallback_tile=None):
         except Exception:
             pass
 
-    # Jika masih generic dan jumlah band 75, gunakan expected band names
+    # If names are still generic and the stack has 75 bands, use the expected band names
     names_are_generic = all(
         name.startswith("band_") for name in names
     )
@@ -368,9 +368,9 @@ def find_band_index(band_names, candidates, required=True):
 
     if required:
         raise ValueError(
-            "Band tidak ditemukan. Kandidat: "
+            "Band was not found. Candidates: "
             + ", ".join(candidates)
-            + "\n\nBand tersedia:\n"
+            + "\n\nAvailable bands:\n"
             + "\n".join(band_names)
         )
 
@@ -510,15 +510,15 @@ def read_downsample(path, max_size=1800):
 
 
 # ============================================================
-# 5. CEK DAN BUKA RF STACK
+# 5. CHECK AND OPEN RF STACK
 # ============================================================
 
 rf_stack_tiles = sorted(glob.glob(RF_STACK_TILE_PATTERN))
 
-print("\n=== CEK FILE RF STACK ===")
+print("\n=== CHECK RF STACK FILES ===")
 print("Single RF stack:", RF_STACK_SINGLE_PATH)
-print("Ada single file:", os.path.exists(RF_STACK_SINGLE_PATH))
-print("Jumlah tile RF stack:", len(rf_stack_tiles))
+print("Single file exists:", os.path.exists(RF_STACK_SINGLE_PATH))
+print("Number of RF-stack tiles:", len(rf_stack_tiles))
 
 for f in rf_stack_tiles:
     print("-", f)
@@ -527,7 +527,7 @@ fallback_tile_for_bandnames = None
 
 if os.path.exists(RF_STACK_SINGLE_PATH):
     RF_STACK_PATH = RF_STACK_SINGLE_PATH
-    print("\nMenggunakan RF stack single:")
+    print("\nUsing single RF stack:")
     print(RF_STACK_PATH)
 
 elif len(rf_stack_tiles) > 0:
@@ -543,23 +543,23 @@ elif len(rf_stack_tiles) > 0:
         RF_STACK_PATH
     )
 
-    print("\nMenggunakan RF stack VRT mosaic:")
+    print("\nUsing RF-stack VRT mosaic:")
     print(RF_STACK_PATH)
 
 else:
     raise FileNotFoundError(
-        "RF stack utama tidak ditemukan.\n"
-        "Yang dicari:\n"
+        "RF stack utama was not found.\n"
+        "Search targets:\n"
         "1. Gowa_Sentinel_2026_RF_Input_Stack_10m.tif\n"
         "2. Gowa_Sentinel_2026_RF_Input_Stack_10m-*.tif\n\n"
-        "Pastikan export GEE RF Input Stack sudah selesai."
+        "Ensure that the GEE RF Input Stack export has completed."
     )
 
 
 src = rasterio.open(RF_STACK_PATH)
 ref_profile = src.profile.copy()
 
-# Jika sumber VRT, output tetap GeoTIFF
+# If the source is a VRT, keep the output as GeoTIFF
 ref_profile.update({
     "driver": "GTiff",
     "compress": "lzw"
@@ -570,17 +570,17 @@ band_names = get_band_names(
     fallback_tile=fallback_tile_for_bandnames
 )
 
-print("\n=== INFO RF STACK YANG DIPAKAI ===")
+print("\n=== RF STACK INFORMATION ===")
 print("Path     :", RF_STACK_PATH)
 print("Driver   :", src.driver)
 print("CRS      :", src.crs)
-print("Resolusi :", src.res)
+print("Resolution:", src.res)
 print("Width    :", src.width)
 print("Height   :", src.height)
 print("Bands    :", src.count)
 print("Nodata   :", src.nodata)
 
-print("\nDaftar band:")
+print("\nBand list:")
 for i, b in enumerate(band_names, start=1):
     print(i, b)
 
@@ -591,20 +591,20 @@ has_s1 = any("vv" in b or "vh" in b or "rvi" in b for b in band_names_lower)
 
 if not has_ndvi:
     raise ValueError(
-        "RF stack yang terbaca belum memiliki band NDVI.\n"
-        "Kemungkinan yang terbaca bukan RF Input Stack gabungan.\n\n"
-        "Band tersedia:\n"
+        "The loaded RF stack does not contain an NDVI band.\n"
+        "The loaded file may not be the combined RF Input Stack.\n\n"
+        "Available bands:\n"
         + "\n".join(band_names)
     )
 
 if not has_s1:
-    print("PERINGATAN: Band Sentinel-1 tidak terdeteksi dalam RF stack.")
+    print("WARNING: Sentinel-1 bands were not detected in the RF stack.")
 
-print("\nRF stack sudah benar dan siap dipakai untuk klasifikasi.")
+print("\nThe RF stack is valid and ready for classification.")
 
 
 # ============================================================
-# 6. PILIH BAND KUNCI UNTUK TRAINING SEED
+# 6. SELECT KEY BANDS FOR TRAINING SEEDS
 # ============================================================
 
 ndvi_idx = find_band_index(
@@ -681,7 +681,7 @@ print("Band RVI  :", rvi_idx, band_names[rvi_idx - 1] if rvi_idx else None)
 
 
 # ============================================================
-# 7. BACA BAND UNTUK PEMBUATAN SAMPEL OTOMATIS
+# 7. READ BANDS FOR AUTOMATED SAMPLE GENERATION
 # ============================================================
 
 NDVI = read_band_as_float(src, ndvi_idx)
@@ -698,11 +698,11 @@ print("\nValid feature pixel:", int(valid_feature_mask.sum()))
 
 
 # ============================================================
-# 8. BACA DATA SAWAH 2024 SEBAGAI POSITIVE SEED
+# 8. READ 2024 RICE DATA AS POSITIVE SEED
 # ============================================================
 
-if os.path.exists(SAWAH_2024_MASK_PATH):
-    seed_path = SAWAH_2024_MASK_PATH
+if os.path.exists(RICE_2024_MASK_PATH):
+    seed_path = RICE_2024_MASK_PATH
 
 elif os.path.exists(SAWAH_2024_ORIGINAL_PATH):
     seed_path = SAWAH_2024_ORIGINAL_PATH
@@ -717,16 +717,16 @@ else:
         ]
     )
 
-    print("\nKandidat data sawah 2024:")
+    print("\nCandidate 2024 rice datasets:")
     for c in candidates[:20]:
         print("-", c)
 
     if len(candidates) == 0:
-        raise FileNotFoundError("Data Sawah_2024 tidak ditemukan.")
+        raise FileNotFoundError("The 2024 rice dataset was not found.")
 
     seed_path = candidates[0]
 
-print("\nData sawah 2024 yang dipakai sebagai positive seed:")
+print("\n2024 rice dataset used as the positive seed:")
 print(seed_path)
 
 rice_seed_raw = align_mask_to_ref(
@@ -737,7 +737,7 @@ rice_seed_raw = align_mask_to_ref(
 
 rice_seed_raw = rice_seed_raw & valid_feature_mask
 
-print("Piksel rice seed raw:", int(rice_seed_raw.sum()))
+print("Raw rice-seed pixels:", int(rice_seed_raw.sum()))
 
 rice_seed_eroded = binary_erosion(
     rice_seed_raw,
@@ -746,16 +746,16 @@ rice_seed_eroded = binary_erosion(
 )
 
 if rice_seed_eroded.sum() < 100:
-    print("Rice seed eroded terlalu sedikit. Menggunakan rice_seed_raw.")
+    print("Too few rice-seed pixels remain after erosion. Using rice_seed_raw.")
     rice_seed = rice_seed_raw.copy()
 else:
     rice_seed = rice_seed_eroded.copy()
 
-print("Piksel rice seed final:", int(rice_seed.sum()))
+print("Final rice-seed pixels:", int(rice_seed.sum()))
 
 
 # ============================================================
-# 9. MEMBUAT NON-RICE SEED OTOMATIS
+# 9. CREATE AUTOMATED NON-RICE SEEDS
 # ============================================================
 
 rice_buffer = binary_dilation(
@@ -766,7 +766,7 @@ rice_buffer = binary_dilation(
 
 not_near_rice = ~rice_buffer
 
-# Air
+# Water
 water_candidate = np.zeros_like(valid_feature_mask, dtype=bool)
 
 if mndwi_idx is not None:
@@ -781,7 +781,7 @@ if ndwi_idx is not None:
         (NDVI < 0.45)
     )
 
-# Terbangun
+# Built-up
 built_candidate = np.zeros_like(valid_feature_mask, dtype=bool)
 
 if ndbi_idx is not None:
@@ -790,13 +790,13 @@ if ndbi_idx is not None:
         (NDVI < 0.50)
     )
 
-# Lahan terbuka
+# Bare/open land
 bare_candidate = (
     (NDVI < 0.25) &
     ((np.isnan(MNDWI)) | (MNDWI < 0.10))
 )
 
-# Vegetasi permanen / hutan / kebun rapat
+# Permanent vegetation / forest / dense plantations
 forest_candidate = (
     (NDVI > 0.78) &
     ((np.isnan(LSWI)) | (LSWI < 0.35))
@@ -816,7 +816,7 @@ nonrice_seed = (
     (~rice_seed_raw)
 )
 
-print("\n=== JUMLAH KANDIDAT NON-SAWAH ===")
+print("\n=== NUMBER OF NON-RICE CANDIDATES ===")
 print("Water candidate :", int((water_candidate & valid_feature_mask).sum()))
 print("Built candidate :", int((built_candidate & valid_feature_mask).sum()))
 print("Bare candidate  :", int((bare_candidate & valid_feature_mask).sum()))
@@ -825,17 +825,17 @@ print("Non-rice seed final:", int(nonrice_seed.sum()))
 
 if rice_seed.sum() < 100:
     raise ValueError(
-        "Sampel sawah terlalu sedikit. Periksa data Sawah_2024."
+        "Too few rice samples were generated. Check the 2024 rice dataset."
     )
 
 if nonrice_seed.sum() < 100:
     raise ValueError(
-        "Sampel non-sawah terlalu sedikit. Threshold perlu dilonggarkan."
+        "Too few non-rice samples were generated. Consider relaxing the threshold."
     )
 
 
 # ============================================================
-# 10. AMBIL SAMPEL TRAINING
+# 10. DRAW TRAINING SAMPLES
 # ============================================================
 
 rice_rows, rice_cols = random_sample_from_mask(
@@ -850,8 +850,8 @@ nonrice_rows, nonrice_cols = random_sample_from_mask(
     seed=RANDOM_SEED + 1
 )
 
-print("\nJumlah sampel sawah    :", len(rice_rows))
-print("Jumlah sampel non-sawah:", len(nonrice_rows))
+print("\nNumber of rice samples     :", len(rice_rows))
+print("Number of non-rice samples :", len(nonrice_rows))
 
 all_rows = np.concatenate([rice_rows, nonrice_rows])
 all_cols = np.concatenate([rice_cols, nonrice_cols])
@@ -875,13 +875,13 @@ rows_valid = all_rows[valid_sample]
 cols_valid = all_cols[valid_sample]
 coords_valid = [coords_all[i] for i in np.where(valid_sample)[0]]
 
-print("Total sampel valid:", len(y))
-print("Sawah valid       :", int(np.sum(y == 1)))
-print("Non-sawah valid   :", int(np.sum(y == 0)))
+print("Total valid samples:", len(y))
+print("Valid rice samples    :", int(np.sum(y == 1)))
+print("Valid non-rice samples:", int(np.sum(y == 0)))
 
 
 # ============================================================
-# 11. SIMPAN TITIK TRAINING
+# 11. SAVE TRAINING POINTS
 # ============================================================
 
 training_df = pd.DataFrame({
@@ -920,7 +920,7 @@ print("Training samples GeoJSON:", training_geojson_path)
 
 
 # ============================================================
-# 12. TRAIN-TEST SPLIT DAN RANDOM FOREST
+# 12. TRAIN-TEST SPLIT AND RANDOM FOREST
 # ============================================================
 
 X_train, X_test, y_train, y_test = train_test_split(
@@ -962,7 +962,7 @@ report = classification_report(
     output_dict=True
 )
 
-print("\n=== INTERNAL ACCURACY BERBASIS TRAINING SEED ===")
+print("\n=== SEED-DERIVED INTERNAL ACCURACY ===")
 print("Accuracy :", acc)
 print("F1 rice  :", f1)
 print("OOB score:", rf.oob_score_)
@@ -1018,7 +1018,7 @@ print("Feature importance:", importance_path)
 
 
 # ============================================================
-# 14. PREDIKSI TILE-BASED UNTUK SELURUH GOWA
+# 14. TILE-BASED PREDICTION FOR ALL OF GOWA
 # ============================================================
 
 prob_path = os.path.join(
@@ -1095,13 +1095,13 @@ with rasterio.open(prob_path, "w", **prob_profile) as prob_dst, \
         if total_windows % 20 == 0:
             print("Windows processed:", total_windows)
 
-print("\nPrediksi selesai.")
+print("\nPrediction completed.")
 print("Probability raster:", prob_path)
 print("Raw binary raster :", class_raw_path)
 
 
 # ============================================================
-# 15. POST-PROCESSING PATCH KECIL
+# 15. SMALL-PATCH POST-PROCESSING
 # ============================================================
 
 class_clean_path = os.path.join(
@@ -1138,18 +1138,18 @@ if REMOVE_SMALL_PATCHES:
     with rasterio.open(class_clean_path, "w", **cls_profile) as dst:
         dst.write(cleaned_arr.astype("uint8"), 1)
 
-    print("\nPost-processing selesai.")
-    print("Jumlah patch awal:", ncomp)
+    print("\nPost-processing completed.")
+    print("Initial number of patches:", ncomp)
     print("Minimum patch pixels:", min_patch_pixels)
     print("Cleaned raster:", class_clean_path)
 
 else:
     class_clean_path = class_raw_path
-    print("Post-processing dilewati.")
+    print("Post-processing skipped.")
 
 
 # ============================================================
-# 16. HITUNG LUAS SAWAH 2026
+# 16. CALCULATE 2026 RICE-FIELD AREA
 # ============================================================
 
 with rasterio.open(class_clean_path) as cls_src:
@@ -1196,14 +1196,14 @@ area_path = os.path.join(
 
 area_summary.to_csv(area_path, index=False)
 
-print("\n=== LUAS SAWAH 2026 HASIL RF ===")
+print("\n=== 2026 RF-DERIVED RICE-FIELD AREA ===")
 display(area_summary)
 
 print("Area summary:", area_path)
 
 
 # ============================================================
-# 17. BACA BATAS GOWA UNTUK VISUALISASI
+# 17. READ GOWA BOUNDARY FOR VISUALIZATION
 # ============================================================
 
 boundary_path = find_first_file(
@@ -1214,7 +1214,7 @@ boundary_path = find_first_file(
         "*Gowa*boundary*.geojson"
     ],
     required=False,
-    label="batas Gowa"
+    label="Gowa boundary"
 )
 
 gowa_admin = None
@@ -1227,7 +1227,7 @@ if boundary_path is not None:
 
     gowa_admin = gowa_admin.to_crs(src.crs)
 
-print("Boundary untuk visualisasi:", boundary_path)
+print("Boundary used for visualization:", boundary_path)
 
 
 def plot_boundary(ax):
@@ -1463,7 +1463,7 @@ print("Figure 5:", fig5_path)
 
 
 # ============================================================
-# 23. SIMPAN METADATA
+# 23. SAVE METADATA
 # ============================================================
 
 metadata = pd.DataFrame([
@@ -1520,7 +1520,7 @@ print("Metadata:", metadata_path)
 
 
 # ============================================================
-# 24. SIMPAN SEMUA TABEL KE EXCEL
+# 24. SAVE ALL TABLES TO EXCEL
 # ============================================================
 
 excel_path = os.path.join(
@@ -1540,13 +1540,13 @@ print("Excel result:", excel_path)
 
 
 # ============================================================
-# 25. RINGKASAN AKHIR
+# 25. FINAL SUMMARY
 # ============================================================
 
 print("============================================================")
-print("KLASIFIKASI SAWAH GOWA 2026 SELESAI")
+print("GOWA 2026 RICE-FIELD CLASSIFICATION COMPLETED")
 print("============================================================")
-print("Raster probabilitas sawah:")
+print("Rice-probability raster:")
 print(prob_path)
 print("")
 print("Raster binary raw:")
@@ -1555,14 +1555,14 @@ print("")
 print("Raster binary cleaned:")
 print(class_clean_path)
 print("")
-print("Luas sawah 2026:")
+print("2026 rice-field area:")
 print(round(rice_area_ha, 2), "ha")
 print("")
-print("Folder figure DPI600:")
+print("600-dpi figure folder:")
 print(FIG_DIR)
 print("")
-print("Catatan penting:")
-print("Akurasi yang dihitung adalah akurasi internal berbasis training seed,")
-print("bukan validasi lapangan penuh. Untuk manuskrip, tetap perlu validasi")
-print("visual/lapangan atau titik uji independen.")
+print("Important note:")
+print("The reported accuracy is an internal seed-derived diagnostic,")
+print("not a full independent field/map validation. The manuscript therefore requires")
+print("independent visual/field reference data or independent validation points.")
 print("============================================================")

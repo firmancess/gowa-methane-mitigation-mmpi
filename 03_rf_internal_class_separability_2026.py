@@ -12,7 +12,7 @@ Superseded/failed notebook cells were intentionally excluded.
 # RF MODEL INTERNAL ACCURACY ASSESSMENT
 # GOWA RICE-FIELD CLASSIFICATION 2026
 #
-# Menghitung:
+# Computes:
 # - OOB score
 # - Train-test confusion matrix
 # - Overall accuracy
@@ -24,8 +24,8 @@ Superseded/failed notebook cells were intentionally excluded.
 # - ROC-AUC
 # - Feature importance
 #
-# Catatan:
-# Ini adalah akurasi internal model RF, bukan akurasi final map AcATaMa.
+# Note:
+# This is an internal RF diagnostic, not the final AcATaMa map-accuracy assessment.
 # ============================================================
 
 try:
@@ -67,7 +67,7 @@ from sklearn.metrics import (
 from IPython.display import display
 
 # ============================================================
-# 1. FOLDER DAN INPUT
+# 1. FOLDERS AND INPUTS
 # ============================================================
 
 DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
@@ -77,7 +77,7 @@ SENTINEL_DIR = os.path.join(
     "Gowa_Sentinel_2026_RF_Input"
 )
 
-SAWAH_2024_MASK_PATH = os.path.join(
+RICE_2024_MASK_PATH = os.path.join(
     DRIVE_ROOT,
     "MMPI_Gowa_Analysis_Output_30m",
     "Sawah_2024_Mamminasata_Gowa_FINAL",
@@ -113,17 +113,17 @@ RF_STACK_VRT = os.path.join(
 
 print("Sentinel RF stack single :", RF_STACK_SINGLE)
 print("Sentinel RF stack tiles  :", RF_STACK_TILE_PATTERN)
-print("Sawah 2024 mask         :", SAWAH_2024_MASK_PATH)
+print("2024 rice mask          :", RICE_2024_MASK_PATH)
 print("Output                  :", OUT_DIR)
 
 # ============================================================
-# 2. PARAMETER MODEL DAN SAMPLING
+# 2. MODEL AND SAMPLING PARAMETERS
 # ============================================================
 
 RANDOM_SEED = 2026
 
-# Jumlah sampel maksimum per kelas untuk training/testing internal
-# Bisa dinaikkan, tetapi semakin besar semakin lama.
+# Maximum number of samples per class for internal training/testing
+# This can be increased, but larger samples require more processing time.
 N_SAMPLES_PER_CLASS = 30000
 
 TEST_SIZE = 0.30
@@ -132,13 +132,13 @@ N_TREES = 500
 MIN_SAMPLES_LEAF = 2
 MAX_FEATURES = "sqrt"
 
-# Threshold default model RF
+# Default RF decision threshold
 DEFAULT_THRESHOLD = 0.50
 
-# Threshold final yang digunakan dalam kalibrasi mask
+# Final threshold used in mask calibration
 SELECTED_FINAL_THRESHOLD = 0.96
 
-# Filter spektral untuk membuat training seed
+# Spectral filters used to construct training seeds
 NDVI_MIN = 0.20
 NDVI_MAX = 0.78
 
@@ -151,16 +151,16 @@ MNDWI_WATER_THRESHOLD = 0.25
 NDBI_BUILT_THRESHOLD = 0.15
 LOW_VEG_NDVI_MAX = 0.18
 
-# Buffer untuk menghindari non-sawah terlalu dekat dengan sawah
+# Buffer to keep non-rice seeds away from rice-reference pixels
 RICE_BUFFER_ITERATIONS = 3
 
 # ============================================================
-# 3. FUNGSI BANTU
+# 3. HELPER FUNCTIONS
 # ============================================================
 
 def build_vrt_from_tiles(tile_files, vrt_path):
     if len(tile_files) == 0:
-        raise FileNotFoundError("Tile RF stack tidak ditemukan.")
+        raise FileNotFoundError("Tile RF stack was not found.")
 
     tile_list_path = vrt_path.replace(".vrt", "_tile_list.txt")
 
@@ -185,7 +185,7 @@ def build_vrt_from_tiles(tile_files, vrt_path):
 
     if result.returncode != 0:
         print(result.stderr)
-        raise RuntimeError("Gagal membuat VRT dari tile.")
+        raise RuntimeError("Failed to build a VRT from the tiles.")
 
     return vrt_path
 
@@ -275,9 +275,9 @@ def find_band_index(band_names, candidates, required=True):
 
     if required:
         raise ValueError(
-            "Band tidak ditemukan: "
+            "Band was not found: "
             + ", ".join(candidates)
-            + "\n\nBand tersedia:\n"
+            + "\n\nAvailable bands:\n"
             + "\n".join(band_names)
         )
 
@@ -333,7 +333,7 @@ def sample_from_mask(mask, n_samples, label_id, label_name, transform, seed):
     rows, cols = np.where(mask)
 
     if len(rows) == 0:
-        raise ValueError(f"Tidak ada piksel untuk kelas {label_name}")
+        raise ValueError(f"No pixels are available for class {label_name}")
 
     n_take = min(n_samples, len(rows))
     idx = rng.choice(len(rows), size=n_take, replace=False)
@@ -376,7 +376,7 @@ def extract_predictor_values(src, sample_df, band_names):
         X[:, b - 1] = arr[rows, cols]
 
         if b % 10 == 0 or b == src.count:
-            print(f"Ekstraksi band {b}/{src.count} selesai.")
+            print(f"Band extraction {b}/{src.count} completed.")
 
     X_df = pd.DataFrame(X, columns=band_names)
 
@@ -385,7 +385,7 @@ def extract_predictor_values(src, sample_df, band_names):
 
 def make_metrics_table(y_true, y_pred, y_prob=None, label_text="Test"):
     class_ids = [0, 1]
-    class_names = ["Non-sawah", "Sawah"]
+    class_names = ["Non-rice", "Rice"]
 
     cm = confusion_matrix(y_true, y_pred, labels=class_ids)
 
@@ -456,8 +456,8 @@ def make_metrics_table(y_true, y_pred, y_prob=None, label_text="Test"):
 
     cm_df = pd.DataFrame(
         cm,
-        index=["Reference_Non-sawah", "Reference_Sawah"],
-        columns=["Predicted_Non-sawah", "Predicted_Sawah"]
+        index=["Reference_Non-rice", "Reference_Rice"],
+        columns=["Predicted_Non-rice", "Predicted_Rice"]
     )
 
     return cm_df, class_df, summary_df
@@ -468,7 +468,7 @@ def predict_from_probability(prob, threshold):
 
 
 # ============================================================
-# 4. BUKA RF STACK
+# 4. OPEN RF STACK
 # ============================================================
 
 tiles = sorted(glob.glob(RF_STACK_TILE_PATTERN))
@@ -489,7 +489,7 @@ print("Bands:", src.count)
 print("CRS:", src.crs)
 
 # ============================================================
-# 5. BACA BAND DIAGNOSTIK UNTUK MEMBUAT TRAINING SEED
+# 5. READ DIAGNOSTIC BANDS TO BUILD TRAINING SEEDS
 # ============================================================
 
 ndvi_med_idx = find_band_index(
@@ -554,18 +554,18 @@ else:
 
 valid = np.isfinite(NDVI_MED)
 
-print("\nBand diagnostik selesai dibaca.")
+print("\nDiagnostic bands loaded.")
 print("Valid pixels:", int(valid.sum()))
 
 # ============================================================
-# 6. BUAT TRAINING SEED SAWAH DAN NON-SAWAH
+# 6. BUILD RICE AND NON-RICE TRAINING SEEDS
 # ============================================================
 
-if not os.path.exists(SAWAH_2024_MASK_PATH):
-    raise FileNotFoundError(f"Mask sawah 2024 tidak ditemukan:\n{SAWAH_2024_MASK_PATH}")
+if not os.path.exists(RICE_2024_MASK_PATH):
+    raise FileNotFoundError(f"2024 rice mask was not found:\n{RICE_2024_MASK_PATH}")
 
 rice2024_mask = align_binary_mask(
-    SAWAH_2024_MASK_PATH,
+    RICE_2024_MASK_PATH,
     src,
     positive_values=[1]
 )
@@ -604,7 +604,7 @@ low_veg_like = (
     (NDVI_MED <= LOW_VEG_NDVI_MAX)
 )
 
-# Positif sawah: referensi sawah 2024 yang masih masuk akal secara NDVI
+# Rice positives: 2024 rice-reference pixels that remain plausible according to NDVI
 rice_seed = (
     rice2024_mask &
     ndvi_ok &
@@ -613,13 +613,13 @@ rice_seed = (
     (~built_like)
 )
 
-# Buffer agar non-sawah tidak terlalu dekat dengan sawah referensi
+# Buffer to keep non-rice seeds away from the rice reference
 rice_buffer = binary_dilation(
     rice2024_mask,
     iterations=RICE_BUFFER_ITERATIONS
 )
 
-# Non-sawah: area stabil yang jelas bukan sawah
+# Non-rice: stable areas that are clearly not rice fields
 nonrice_seed = (
     valid &
     (~rice_buffer) &
@@ -641,17 +641,17 @@ print("Built-like pixels          :", int(built_like.sum()))
 print("Low vegetation pixels      :", int(low_veg_like.sum()))
 
 if rice_seed.sum() == 0 or nonrice_seed.sum() == 0:
-    raise ValueError("Training seed salah satu kelas bernilai 0. Periksa threshold NDVI/non-rice.")
+    raise ValueError("One training-seed class contains zero pixels. Check the NDVI/non-rice thresholds.")
 
 # ============================================================
-# 7. SAMPLING TRAINING DATA
+# 7. SAMPLE TRAINING DATA
 # ============================================================
 
 rice_samples = sample_from_mask(
     rice_seed,
     N_SAMPLES_PER_CLASS,
     1,
-    "Sawah",
+    "Rice",
     src.transform,
     RANDOM_SEED
 )
@@ -660,7 +660,7 @@ nonrice_samples = sample_from_mask(
     nonrice_seed,
     N_SAMPLES_PER_CLASS,
     0,
-    "Non-sawah",
+    "Non-rice",
     src.transform,
     RANDOM_SEED + 1
 )
@@ -695,36 +695,36 @@ sample_gdf = gpd.GeoDataFrame(
 
 sample_gdf.to_file(sample_geojson, driver="GeoJSON")
 
-print("\nSampel model disimpan:")
+print("\nModel samples saved:")
 print(sample_csv)
 print(sample_geojson)
 
-print("\nDistribusi sampel:")
+print("\nSample distribution:")
 display(sample_df["label_name"].value_counts())
 
 # ============================================================
-# 8. EKSTRAKSI NILAI PREDIKTOR
+# 8. EXTRACT PREDICTOR VALUES
 # ============================================================
 
-print("\nMulai ekstraksi nilai prediktor dari RF stack...")
+print("\nStarting predictor extraction from the RF stack...")
 
 X_raw_df = extract_predictor_values(src, sample_df, band_names)
 y = sample_df["label_id"].values.astype(int)
 
-# Buang band yang seluruh nilainya NaN
+# Drop bands containing only NaN values
 valid_band_mask = ~X_raw_df.isna().all(axis=0)
 X_raw_df = X_raw_df.loc[:, valid_band_mask]
 
 used_band_names = list(X_raw_df.columns)
 
-print("\nJumlah band awal:", len(band_names))
-print("Jumlah band digunakan:", len(used_band_names))
+print("\nInitial number of bands:", len(band_names))
+print("Number of bands used:", len(used_band_names))
 
-# Imputasi median
+# Median imputation
 imputer = SimpleImputer(strategy="median")
 X = imputer.fit_transform(X_raw_df)
 
-# Buang baris yang masih NaN setelah imputasi, jika ada
+# Drop any rows that remain NaN after imputation
 valid_rows = np.isfinite(X).all(axis=1)
 
 X = X[valid_rows]
@@ -732,9 +732,9 @@ y = y[valid_rows]
 
 sample_used_df = sample_df.loc[valid_rows].reset_index(drop=True)
 
-print("\nJumlah sampel setelah ekstraksi dan imputasi:", len(y))
-print("Distribusi kelas setelah imputasi:")
-print(pd.Series(y).map({0: "Non-sawah", 1: "Sawah"}).value_counts())
+print("\nNumber of samples after extraction and imputation:", len(y))
+print("Class distribution after imputation:")
+print(pd.Series(y).map({0: "Non-rice", 1: "Rice"}).value_counts())
 
 # ============================================================
 # 9. TRAIN-TEST SPLIT
@@ -753,9 +753,9 @@ print("\n===== TRAIN-TEST SPLIT =====")
 print("Train samples:", len(y_train))
 print("Test samples :", len(y_test))
 print("Train class distribution:")
-print(pd.Series(y_train).map({0: "Non-sawah", 1: "Sawah"}).value_counts())
+print(pd.Series(y_train).map({0: "Non-rice", 1: "Rice"}).value_counts())
 print("Test class distribution:")
-print(pd.Series(y_test).map({0: "Non-sawah", 1: "Sawah"}).value_counts())
+print(pd.Series(y_test).map({0: "Non-rice", 1: "Rice"}).value_counts())
 
 # ============================================================
 # 10. TRAIN RANDOM FOREST
@@ -772,14 +772,14 @@ rf = RandomForestClassifier(
     random_state=RANDOM_SEED
 )
 
-print("\nMelatih Random Forest...")
+print("\nTraining Random Forest...")
 rf.fit(X_train, y_train)
 
-print("Training selesai.")
+print("Training completed.")
 print("OOB score:", rf.oob_score_)
 
 # ============================================================
-# 11. PREDIKSI TEST SET
+# 11. PREDICT TEST SET
 # ============================================================
 
 y_pred_test_default = rf.predict(X_test)
@@ -801,7 +801,7 @@ y_pred_test_thr096 = predict_from_probability(
 
 oob_prob_all = rf.oob_decision_function_
 
-# Ambil hanya data train dengan OOB valid
+# Use only training samples with valid OOB predictions
 oob_valid = (
     np.isfinite(oob_prob_all).all(axis=1) &
     (oob_prob_all.sum(axis=1) > 0)
@@ -821,7 +821,7 @@ y_pred_oob_thr096 = predict_from_probability(
 )
 
 # ============================================================
-# 13. HITUNG METRIK
+# 13. CALCULATE METRICS
 # ============================================================
 
 cm_test_default, class_test_default, summary_test_default = make_metrics_table(
@@ -921,7 +921,7 @@ print("\n===== TOP 30 FEATURE IMPORTANCE =====")
 display(importance_df.head(30))
 
 # ============================================================
-# 15. SIMPAN MODEL DAN OUTPUT
+# 15. SAVE MODEL AND OUTPUTS
 # ============================================================
 
 model_path = os.path.join(
@@ -970,8 +970,8 @@ with pd.ExcelWriter(excel_path, engine="openpyxl") as writer:
             "Value": RF_STACK_PATH
         },
         {
-            "Item": "Sawah 2024 seed",
-            "Value": SAWAH_2024_MASK_PATH
+            "Item": "2024 rice seed",
+            "Value": RICE_2024_MASK_PATH
         },
         {
             "Item": "Samples per class requested",
@@ -1044,7 +1044,7 @@ class_all.to_csv(class_csv, index=False)
 importance_df.to_csv(importance_csv, index=False)
 
 # ============================================================
-# 16. REPORT TEKS
+# 16. TEXT REPORT
 # ============================================================
 
 def fmt_pct(x):
@@ -1077,7 +1077,7 @@ report_lines.append("These metrics represent internal Random Forest model perfor
 report_lines.append("They are not a substitute for map accuracy assessment using independent interpreted samples or AcATaMa.")
 report_lines.append("")
 report_lines.append(f"RF stack: {RF_STACK_PATH}")
-report_lines.append(f"Sawah 2024 positive seed: {SAWAH_2024_MASK_PATH}")
+report_lines.append(f"2024 rice positive seed: {RICE_2024_MASK_PATH}")
 report_lines.append("")
 report_lines.append("Model settings:")
 report_lines.append(f"- Number of trees: {N_TREES}")
@@ -1129,11 +1129,11 @@ with open(report_path, "w", encoding="utf-8") as f:
     f.write(report_text)
 
 print("\n============================================================")
-print("RF MODEL INTERNAL ACCURACY SELESAI")
+print("RF INTERNAL CLASS-SEPARABILITY ASSESSMENT COMPLETED")
 print("============================================================")
 print(report_text)
 print("")
-print("Output Excel:")
+print("Excel output:")
 print(excel_path)
 print("")
 print("Report:")

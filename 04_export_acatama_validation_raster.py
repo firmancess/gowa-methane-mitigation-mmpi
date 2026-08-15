@@ -11,10 +11,10 @@ Superseded/failed notebook cells were intentionally excluded.
 # ============================================================
 # EXPORT RF FINAL RICE CLASSIFICATION FOR ACATAMA QGIS
 # TWO VALIDATION CLASSES ONLY:
-# 1 = Non-sawah
-# 2 = Sawah
+# 1 = Non-rice
+# 2 = Rice
 #
-# NoData = 0, tetapi tidak dimasukkan ke legend AcATaMa
+# NoData = 0 and is excluded from the AcATaMa class legend
 # ============================================================
 
 try:
@@ -60,19 +60,19 @@ OUTPUT_CSV = os.path.join(
 # 2. CLASS SETTING
 # ============================================================
 
-# Input raster RF final:
-# 0   = Non-sawah
-# 1   = Sawah
+# Final RF input raster:
+# 0   = Non-rice
+# 1   = Rice
 # 255 = NoData / luar area valid
 
 INPUT_NON_RICE = 0
 INPUT_RICE = 1
 INPUT_NODATA = 255
 
-# Output raster untuk AcATaMa:
-# 1 = Non-sawah
-# 2 = Sawah
-# 0 = NoData, tidak dimasukkan sebagai kelas validasi
+# Output raster for AcATaMa:
+# 1 = Non-rice
+# 2 = Rice
+# 0 = NoData and is excluded as a validation class
 
 CLASS_NON_RICE = 1
 CLASS_RICE = 2
@@ -83,7 +83,7 @@ NODATA_VALUE = 0
 # ============================================================
 
 if not os.path.exists(INPUT_RASTER):
-    raise FileNotFoundError(f"Input raster tidak ditemukan:\n{INPUT_RASTER}")
+    raise FileNotFoundError(f"Input raster was not found:\n{INPUT_RASTER}")
 
 with rasterio.open(INPUT_RASTER) as src:
     data = src.read(1)
@@ -92,33 +92,33 @@ with rasterio.open(INPUT_RASTER) as src:
     crs = src.crs
     nodata_in = src.nodata
 
-print("Input raster ditemukan:")
+print("Input raster found:")
 print(INPUT_RASTER)
 print("CRS:", crs)
 print("Shape:", data.shape)
 print("Input NoData:", nodata_in)
-print("Unique values input:", np.unique(data))
+print("Unique input values:", np.unique(data))
 
 # ============================================================
 # 4. CONVERT CLASS TO TWO-CLASS ACATAMA FORMAT
 # ============================================================
 
-# Buat output awal sebagai NoData
+# Initialize the output as NoData
 out = np.full(data.shape, NODATA_VALUE, dtype=np.uint8)
 
-# Konversi kelas valid
+# Convert valid classes
 out[data == INPUT_NON_RICE] = CLASS_NON_RICE
 out[data == INPUT_RICE] = CLASS_RICE
 
-# NoData input tetap NoData output
+# Preserve input NoData as output NoData
 out[data == INPUT_NODATA] = NODATA_VALUE
 
-# Jika ada nilai lain selain 0, 1, 255, jadikan NoData
+# Convert any values other than 0, 1, and 255 to NoData
 valid_input_values = np.isin(data, [INPUT_NON_RICE, INPUT_RICE, INPUT_NODATA])
 out[~valid_input_values] = NODATA_VALUE
 
-print("Unique values output termasuk NoData:", np.unique(out))
-print("Unique kelas valid untuk AcATaMa:", np.unique(out[out != NODATA_VALUE]))
+print("Unique output values including NoData:", np.unique(out))
+print("Unique valid AcATaMa classes:", np.unique(out[out != NODATA_VALUE]))
 
 # ============================================================
 # 5. UPDATE RASTER PROFILE
@@ -141,32 +141,32 @@ profile.update(
 with rasterio.open(OUTPUT_TIF, "w", **profile) as dst:
     dst.write(out, 1)
 
-    # Colormap hanya untuk dua kelas valid
+    # Colormap for the two valid classes only
     dst.write_colormap(
         1,
         {
-            CLASS_NON_RICE: (220, 220, 220, 255),  # abu-abu = non-sawah
-            CLASS_RICE: (0, 150, 70, 255),         # hijau = sawah
+            CLASS_NON_RICE: (220, 220, 220, 255),  # gray = non-rice
+            CLASS_RICE: (0, 150, 70, 255),         # green = rice
             NODATA_VALUE: (255, 255, 255, 0)       # transparan = NoData
         }
     )
 
-print("\nRaster dua kelas untuk AcATaMa berhasil disimpan:")
+print("\nTwo-class AcATaMa raster saved:")
 print(OUTPUT_TIF)
 
 # ============================================================
-# 7. SAVE CLASS LEGEND - HANYA DUA KELAS
+# 7. SAVE CLASS LEGEND - TWO CLASSES ONLY
 # ============================================================
 
 legend_text = """class_id,class_name,description
-1,Non-sawah,Area bukan sawah berdasarkan hasil klasifikasi Random Forest final 2026
-2,Sawah,Area sawah berdasarkan hasil klasifikasi Random Forest final 2026
+1,Non-rice,Area classified as non-rice by the final 2026 Random Forest map
+2,Rice,Area classified as rice by the final 2026 Random Forest map
 """
 
 with open(OUTPUT_CSV, "w", encoding="utf-8") as f:
     f.write(legend_text)
 
-print("\nLegenda dua kelas berhasil disimpan:")
+print("\nTwo-class legend saved:")
 print(OUTPUT_CSV)
 
 # ============================================================
@@ -186,13 +186,13 @@ rice_area_ha = rice_pixels * pixel_area_ha
 print("\n===== SUMMARY OUTPUT =====")
 print(f"Pixel area        : {pixel_area_m2:.2f} m²")
 print(f"Pixel area        : {pixel_area_ha:.4f} ha")
-print(f"Non-sawah pixels  : {non_rice_pixels:,}")
-print(f"Non-sawah area    : {non_rice_area_ha:,.2f} ha")
-print(f"Sawah pixels      : {rice_pixels:,}")
-print(f"Sawah area        : {rice_area_ha:,.2f} ha")
+print(f"Non-rice pixels  : {non_rice_pixels:,}")
+print(f"Non-rice area    : {non_rice_area_ha:,.2f} ha")
+print(f"Rice pixels      : {rice_pixels:,}")
+print(f"Rice area        : {rice_area_ha:,.2f} ha")
 print(f"NoData pixels     : {nodata_pixels:,}")
 
-print("\nFile siap digunakan untuk validasi klasifikasi RF di QGIS AcATaMa.")
-print("Kelas valid AcATaMa hanya:")
-print("1 = Non-sawah")
-print("2 = Sawah")
+print("\nThe file is ready for RF map validation in QGIS AcATaMa.")
+print("Valid AcATaMa classes:")
+print("1 = Non-rice")
+print("2 = Rice")

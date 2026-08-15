@@ -10,8 +10,8 @@ Superseded/failed notebook cells were intentionally excluded.
 
 # ============================================================
 # FIXED CALIBRATION SCRIPT
-# KALIBRASI ULANG SAWAH RF 2026 GOWA
-# Mengatasi masalah slope filter yang membuat hasil menjadi 0 ha
+# FINAL CALIBRATION OF THE 2026 GOWA RF RICE MASK
+# Retains the successful workflow after the slope-filter diagnostic issue
 # ============================================================
 
 
@@ -48,7 +48,7 @@ except Exception:
 
 
 # ============================================================
-# 1. FOLDER DAN INPUT
+# 1. FOLDERS AND INPUTS
 # ============================================================
 
 DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
@@ -73,7 +73,7 @@ MMPI_GEE_DIR = os.path.join(
     "MMPI_Gowa_GEE_30m_2021_2025"
 )
 
-SAWAH_2024_MASK_PATH = os.path.join(
+RICE_2024_MASK_PATH = os.path.join(
     DRIVE_ROOT,
     "MMPI_Gowa_Analysis_Output_30m",
     "Sawah_2024_Mamminasata_Gowa_FINAL",
@@ -122,12 +122,12 @@ RF_STACK_TILE_PATTERN = os.path.join(
 print("Raw RF class      :", RAW_CLASS_PATH)
 print("RF probability    :", PROB_PATH)
 print("Previous filtered :", PREVIOUS_FILTERED_PATH)
-print("Sawah 2024 ref    :", SAWAH_2024_MASK_PATH)
+print("2024 rice reference:", RICE_2024_MASK_PATH)
 print("Output            :", OUT_DIR)
 
 
 # ============================================================
-# 2. PARAMETER KALIBRASI
+# 2. CALIBRATION PARAMETERS
 # ============================================================
 
 PROB_THRESHOLDS = [
@@ -136,34 +136,35 @@ PROB_THRESHOLDS = [
     0.94, 0.96, 0.98
 ]
 
+# Historical calibration target retained exactly from the final successful workflow; document its provenance before release.
 TARGET_RICE_AREA_HA = 24096
 TARGET_MIN_AREA_HA = 18000
 TARGET_MAX_AREA_HA = 35000
 
-# Filter spektral sawah
+# Rice spectral filters
 NDVI_MIN = 0.20
 NDVI_MAX = 0.78
 
 NDVI_AMP_MIN_OUTSIDE = 0.08
 LSWI_AMP_MIN_OUTSIDE = 0.05
 
-# Filter hutan/perkebunan permanen
+# Permanent forest/plantation filters
 FOREST_NDVI_MIN = 0.76
 FOREST_NDVI_STD_MAX = 0.08
 FOREST_NDVI_AMP_MAX = 0.10
 
-# Filter air dan terbangun
+# Water and built-up filters
 MNDWI_WATER_THRESHOLD = 0.25
 NDBI_BUILT_THRESHOLD = 0.15
 
-# Slope hanya digunakan jika valid
+# Use slope only when the diagnostic validity criterion is met
 SLOPE_STRICT_MAX = 12.0
 SLOPE_MIN_VALID_PIXEL = 50000
 
-# Referensi sawah 2024 dipertahankan secara lebih longgar
+# Apply a more permissive probability threshold inside the 2024 rice reference
 REF_PROB_MIN = 0.35
 
-# Minimum patch sawah
+# Minimum rice-patch area
 MIN_PATCH_AREA_HA = 0.50
 
 N_VALIDATION_POINTS = 150
@@ -172,12 +173,12 @@ DPI = 600
 
 
 # ============================================================
-# 3. FUNGSI DASAR
+# 3. CORE FUNCTIONS
 # ============================================================
 
 def build_vrt_from_tiles(tile_files, vrt_path):
     if len(tile_files) == 0:
-        raise FileNotFoundError("Tile RF stack tidak ditemukan.")
+        raise FileNotFoundError("Tile RF stack was not found.")
 
     tile_list_path = vrt_path.replace(".vrt", "_tile_list.txt")
 
@@ -202,7 +203,7 @@ def build_vrt_from_tiles(tile_files, vrt_path):
 
     if result.returncode != 0:
         print(result.stderr)
-        raise RuntimeError("Gagal membuat VRT.")
+        raise RuntimeError("Failed to build the VRT.")
 
     return vrt_path
 
@@ -292,9 +293,9 @@ def find_band_index(band_names, candidates, required=True):
 
     if required:
         raise ValueError(
-            "Band tidak ditemukan: "
+            "Band not found: "
             + ", ".join(candidates)
-            + "\n\nBand tersedia:\n"
+            + "\n\nAvailable bands:\n"
             + "\n".join(band_names)
         )
 
@@ -434,7 +435,7 @@ def write_raster(path, arr, ref_profile, dtype="uint8", nodata=255):
     with rasterio.open(path, "w", **profile) as dst:
         dst.write(out, 1)
 
-    print("Raster tersimpan:", path)
+    print("Raster saved:", path)
 
 
 def remove_small_patches(binary_mask, pixel_area_ha, min_area_ha):
@@ -476,7 +477,7 @@ def save_fig(fig, filename):
     path = os.path.join(FIG_DIR, filename)
     fig.savefig(path, dpi=DPI, bbox_inches="tight", pad_inches=0.03)
     plt.show()
-    print("Figure tersimpan:", path)
+    print("Figure saved:", path)
     return path
 
 
@@ -516,7 +517,7 @@ def sample_points_from_mask(mask, n, label, transform, prob_arr, class_arr, seed
 
 
 # ============================================================
-# 4. BUKA RF STACK SENTINEL 2026
+# 4. OPEN THE 2026 SENTINEL RF STACK
 # ============================================================
 
 tiles = sorted(glob.glob(RF_STACK_TILE_PATTERN))
@@ -547,7 +548,7 @@ print("Bands:", src.count)
 
 
 # ============================================================
-# 5. BACA RASTER RF DAN BAND DIAGNOSTIK
+# 5. READ RF RASTERS AND DIAGNOSTIC BANDS
 # ============================================================
 
 with rasterio.open(RAW_CLASS_PATH) as cls_src:
@@ -634,11 +635,11 @@ else:
     else:
         LSWI_AMP = np.full_like(NDVI_MED, np.nan)
 
-print("Band diagnostik selesai dibaca.")
+print("Diagnostic bands loaded.")
 
 
 # ============================================================
-# 6. BACA SLOPE, TETAPI JANGAN JADIKAN WAJIB
+# 6. READ SLOPE, BUT DO NOT FORCE IT AS A REQUIRED FILTER
 # ============================================================
 
 MMPI_EXPECTED_BANDS = [
@@ -724,7 +725,7 @@ if len(mean_stack_candidates) > 0:
             slope_available = True
 
     except Exception as e:
-        print("Slope gagal dibaca:", e)
+        print("Failed to read slope:", e)
 
 if slope_10m is None:
     slope_10m = np.full_like(NDVI_MED, np.nan)
@@ -732,17 +733,17 @@ if slope_10m is None:
 slope_valid_count = np.sum(np.isfinite(slope_10m) & valid)
 slope_low_count = np.sum(np.isfinite(slope_10m) & valid & (slope_10m <= SLOPE_STRICT_MAX))
 
-print("\n=== DIAGNOSIS SLOPE ===")
+print("\n=== SLOPE DIAGNOSTIC ===")
 print("Slope available       :", slope_available)
 print("Slope valid pixel     :", int(slope_valid_count))
 print("Slope <= threshold px :", int(slope_low_count))
 
 if slope_available and slope_low_count >= SLOPE_MIN_VALID_PIXEL:
     slope_used = True
-    print("Slope digunakan sebagai filter.")
+    print("Slope is used as a filter.")
 else:
     slope_used = False
-    print("Slope TIDAK digunakan karena tidak lolos sanity check.")
+    print("Slope is NOT used because it did not pass the sanity check.")
 
 if slope_used:
     slope_ok = slope_10m <= SLOPE_STRICT_MAX
@@ -751,12 +752,12 @@ else:
 
 
 # ============================================================
-# 7. BACA REFERENSI SAWAH 2024
+# 7. READ THE 2024 RICE REFERENCE
 # ============================================================
 
-if os.path.exists(SAWAH_2024_MASK_PATH):
+if os.path.exists(RICE_2024_MASK_PATH):
     rice2024_mask = align_binary_mask(
-        SAWAH_2024_MASK_PATH,
+        RICE_2024_MASK_PATH,
         src,
         positive_values=[1]
     )
@@ -768,11 +769,11 @@ else:
 rice2024_mask = rice2024_mask & valid
 
 print("\nRice 2024 available:", rice2024_available)
-print("Luas referensi sawah 2024 grid 10 m:", round(rice2024_mask.sum() * 0.01, 2), "ha")
+print("2024 rice-reference area on the 10 m grid:", round(rice2024_mask.sum() * 0.01, 2), "ha")
 
 
 # ============================================================
-# 8. FILTER SPEKTRAL DAN TEMPORAL
+# 8. SPECTRAL AND TEMPORAL FILTERS
 # ============================================================
 
 pixel_area_ha = abs(src.transform.a * src.transform.e) / 10000.0
@@ -834,7 +835,7 @@ basic_ok = (
     slope_ok
 )
 
-print("\n=== DIAGNOSIS FILTER ===")
+print("\n=== FILTER DIAGNOSTIC ===")
 print("Valid area ha                 :", round(valid_area_ha, 2))
 print("Raw RF rice area ha           :", round(raw_rice_area_ha, 2))
 print("Previous filtered area ha     :", round(previous_filtered_area_ha, 2))
@@ -847,22 +848,22 @@ print("Basic ok pixel                :", int(basic_ok.sum()))
 
 
 # ============================================================
-# 9. BUAT KANDIDAT MASK PER THRESHOLD
+# 9. BUILD CANDIDATE MASKS FOR EACH THRESHOLD
 # ============================================================
 
 def make_candidate(threshold):
     inside_ref = rice2024_mask & valid
     outside_ref = (~rice2024_mask) & valid
 
-    # Komponen referensi 2024: dipertahankan jika sinyal RF dan spektral masih masuk akal.
-    # Tidak wajib seasonality karena referensi 2024 sudah menjadi prior.
+    # 2024-reference component: retain pixels when RF and spectral signals remain plausible.
+    # Seasonality is not mandatory here because the 2024 reference already acts as a prior.
     ref_component = (
         inside_ref &
         (prob >= REF_PROB_MIN) &
         basic_ok
     )
 
-    # Komponen luar referensi 2024: harus lebih ketat.
+    # Outside the 2024 reference: apply stricter criteria.
     outside_component = (
         outside_ref &
         previous_filtered_mask &
@@ -923,7 +924,7 @@ display(threshold_df)
 
 
 # ============================================================
-# 10. PILIH THRESHOLD TERBAIK
+# 10. SELECT THE BEST THRESHOLD
 # ============================================================
 
 within_range = threshold_df[
@@ -940,20 +941,20 @@ SELECTED_THRESHOLD = float(selected_row["Probability_Threshold"])
 selected_mask = candidate_masks[SELECTED_THRESHOLD]
 selected_area_ha = selected_mask.sum() * pixel_area_ha
 
-print("\n=== THRESHOLD TERPILIH ===")
+print("\n=== SELECTED THRESHOLD ===")
 print("Selected threshold:", SELECTED_THRESHOLD)
 print("Selected rice area:", round(selected_area_ha, 2), "ha")
 print("Difference from target:", round(selected_area_ha - TARGET_RICE_AREA_HA, 2), "ha")
 
 if selected_area_ha < TARGET_MIN_AREA_HA or selected_area_ha > TARGET_MAX_AREA_HA:
-    print("PERINGATAN: luas masih di luar rentang kewajaran.")
-    print("Perlu cek visual atau perbaiki training RF.")
+    print("WARNING: the mapped area remains outside the predefined plausibility range.")
+    print("Visual inspection or RF-training revision is required.")
 else:
-    print("Luas berada dalam rentang kewajaran awal.")
+    print("The mapped area falls within the predefined plausibility range.")
 
 
 # ============================================================
-# 11. SIMPAN RASTER FINAL
+# 11. SAVE THE FINAL RASTER
 # ============================================================
 
 final_class = np.full(raw_class.shape, 255, dtype="uint8")
@@ -1019,7 +1020,7 @@ else:
 
 
 # ============================================================
-# 12. SIMPAN MASK KANDIDAT UNTUK CEK VISUAL
+# 12. SAVE CANDIDATE MASKS FOR VISUAL INSPECTION
 # ============================================================
 
 for th in PROB_THRESHOLDS:
@@ -1043,7 +1044,7 @@ for th in PROB_THRESHOLDS:
 
 
 # ============================================================
-# 13. PERBANDINGAN DENGAN REFERENSI 2024
+# 13. COMPARISON WITH THE 2024 REFERENCE
 # ============================================================
 
 stable_ref_final = rice2024_mask & selected_mask
@@ -1107,7 +1108,7 @@ display(comparison_df)
 
 
 # ============================================================
-# 14. TABEL RINGKASAN FINAL
+# 14. FINAL SUMMARY TABLE
 # ============================================================
 
 summary_df = pd.DataFrame([
@@ -1151,7 +1152,7 @@ display(summary_df)
 
 
 # ============================================================
-# 15. TITIK VALIDASI VISUAL
+# 15. VISUAL-VALIDATION POINTS
 # ============================================================
 
 high_conf_rice = (
@@ -1235,7 +1236,7 @@ print("Validation GeoJSON:", validation_geojson_path)
 
 
 # ============================================================
-# 16. BATAS GOWA UNTUK VISUALISASI
+# 16. GOWA BOUNDARY FOR VISUALIZATION
 # ============================================================
 
 boundary_candidates = find_file(
@@ -1260,7 +1261,7 @@ if len(boundary_candidates) > 0:
     gowa_admin = gowa_admin.to_crs(src.crs)
     print("Boundary:", boundary_path)
 else:
-    print("Batas Gowa tidak ditemukan.")
+    print("Gowa boundary was not found.")
 
 
 def plot_boundary(ax):
@@ -1274,7 +1275,7 @@ def plot_boundary(ax):
 
 
 # ============================================================
-# 17. VISUALISASI 1 - RAW, PREVIOUS, FIXED FINAL
+# 17. VISUALIZATION 1 - RAW, PREVIOUS, AND FINAL CALIBRATED MASKS
 # ============================================================
 
 extent = plotting_extent(src)
@@ -1323,7 +1324,7 @@ fig1_path = save_fig(
 
 
 # ============================================================
-# 18. VISUALISASI 2 - PROBABILITY, NDVI AMP, FINAL
+# 18. VISUALIZATION 2 - PROBABILITY, NDVI AMPLITUDE, AND FINAL MASK
 # ============================================================
 
 fig, axes = plt.subplots(1, 3, figsize=(16, 5.8))
@@ -1380,7 +1381,7 @@ fig2_path = save_fig(
 
 
 # ============================================================
-# 19. VISUALISASI 3 - SENSITIVITAS THRESHOLD
+# 19. VISUALIZATION 3 - THRESHOLD SENSITIVITY
 # ============================================================
 
 fig, ax = plt.subplots(figsize=(8.8, 5.4))
@@ -1442,7 +1443,7 @@ fig3_path = save_fig(
 
 
 # ============================================================
-# 20. VISUALISASI 4 - PERBANDINGAN 2024 DAN FINAL 2026
+# 20. VISUALIZATION 4 - 2024 REFERENCE VS FINAL 2026 MASK
 # ============================================================
 
 comparison_cmap = ListedColormap([
@@ -1494,7 +1495,7 @@ fig4_path = save_fig(
 
 
 # ============================================================
-# 21. SIMPAN EXCEL DAN INDEX
+# 21. SAVE EXCEL OUTPUTS AND INDEX
 # ============================================================
 
 excel_path = os.path.join(
@@ -1588,7 +1589,7 @@ display(index_df)
 
 
 # ============================================================
-# 22. LAPORAN TEKS
+# 22. TEXT REPORT
 # ============================================================
 
 report = f"""
@@ -1644,30 +1645,30 @@ print("Report:", report_path)
 
 
 # ============================================================
-# 23. RINGKASAN AKHIR
+# 23. FINAL SUMMARY
 # ============================================================
 
 print("============================================================")
-print("KALIBRASI FIXED SAWAH 2026 SELESAI")
+print("FINAL 2026 RICE-MASK CALIBRATION COMPLETED")
 print("============================================================")
-print("Raster final:")
+print("Final raster:")
 print(final_path)
 print("")
-print("Luas sawah final fixed:")
+print("Final calibrated rice area:")
 print(round(selected_area_ha, 2), "ha")
 print("")
-print("Threshold terpilih:")
+print("Selected threshold:")
 print(SELECTED_THRESHOLD)
 print("")
-print("Slope digunakan:")
+print("Slope used:")
 print(slope_used)
 print("")
-print("Tabel sensitivitas:")
+print("Sensitivity table:")
 print(threshold_table_path)
 print("")
 print("Figure DPI600:")
 print(FIG_DIR)
 print("")
-print("Validasi visual:")
+print("Visual validation:")
 print(validation_geojson_path)
 print("============================================================")
