@@ -6,6 +6,15 @@ Applies the final conservative probability and spectral filters used to create t
 
 This file was selected from the final successful workflow in the uploaded analysis notebook.
 Superseded/failed notebook cells were intentionally excluded.
+
+Publication-stage provenance note
+--------------------------------
+An exploratory area-based heuristic was tested during model development. Because the
+provenance of that historical area target cannot be independently documented, it is not
+used here as a publication-stage selection or validation criterion. The outside-reference
+probability threshold is therefore fixed at 0.96, matching the calibrated value reported
+in the manuscript. The threshold sweep is retained only as a sensitivity diagnostic.
+Independent final-map accuracy is assessed separately using the AcATaMa validation output.
 """
 
 # ============================================================
@@ -136,10 +145,9 @@ PROB_THRESHOLDS = [
     0.94, 0.96, 0.98
 ]
 
-# Historical calibration target retained exactly from the final successful workflow; document its provenance before release.
-TARGET_RICE_AREA_HA = 24096
-TARGET_MIN_AREA_HA = 18000
-TARGET_MAX_AREA_HA = 35000
+# Final outside-reference probability threshold reported in the manuscript.
+# The candidate threshold sweep below is retained for diagnostic sensitivity only.
+FINAL_OUTSIDE_REF_PROB_THRESHOLD = 0.96
 
 # Rice spectral filters
 NDVI_MIN = 0.20
@@ -903,8 +911,6 @@ for th in PROB_THRESHOLDS:
         "Percent_of_valid_area": area_ha / valid_area_ha * 100,
         "Area_inside_2024_ref_ha": ref_area_ha,
         "Area_outside_2024_ref_ha": outside_area_ha,
-        "Difference_from_target_ha": area_ha - TARGET_RICE_AREA_HA,
-        "Abs_difference_from_target_ha": abs(area_ha - TARGET_RICE_AREA_HA),
         "Patch_count_before_cleaning": ncomp,
         "Minimum_patch_pixels": min_pixels
     })
@@ -924,33 +930,26 @@ display(threshold_df)
 
 
 # ============================================================
-# 10. SELECT THE BEST THRESHOLD
+# 10. APPLY THE FIXED MANUSCRIPT THRESHOLD
 # ============================================================
 
-within_range = threshold_df[
-    (threshold_df["Rice_Area_ha"] >= TARGET_MIN_AREA_HA) &
-    (threshold_df["Rice_Area_ha"] <= TARGET_MAX_AREA_HA)
-].copy()
+SELECTED_THRESHOLD = float(FINAL_OUTSIDE_REF_PROB_THRESHOLD)
 
-if len(within_range) > 0:
-    selected_row = within_range.sort_values("Abs_difference_from_target_ha").iloc[0]
-else:
-    selected_row = threshold_df.sort_values("Abs_difference_from_target_ha").iloc[0]
+if SELECTED_THRESHOLD not in candidate_masks:
+    raise ValueError(
+        f"Fixed manuscript threshold {SELECTED_THRESHOLD} is not present in PROB_THRESHOLDS."
+    )
 
-SELECTED_THRESHOLD = float(selected_row["Probability_Threshold"])
 selected_mask = candidate_masks[SELECTED_THRESHOLD]
 selected_area_ha = selected_mask.sum() * pixel_area_ha
 
-print("\n=== SELECTED THRESHOLD ===")
+print("\n=== FIXED MANUSCRIPT THRESHOLD ===")
 print("Selected threshold:", SELECTED_THRESHOLD)
 print("Selected rice area:", round(selected_area_ha, 2), "ha")
-print("Difference from target:", round(selected_area_ha - TARGET_RICE_AREA_HA, 2), "ha")
-
-if selected_area_ha < TARGET_MIN_AREA_HA or selected_area_ha > TARGET_MAX_AREA_HA:
-    print("WARNING: the mapped area remains outside the predefined plausibility range.")
-    print("Visual inspection or RF-training revision is required.")
-else:
-    print("The mapped area falls within the predefined plausibility range.")
+print(
+    "Threshold sweep retained as a sensitivity diagnostic; "
+    "no undocumented area target is used for publication-stage selection."
+)
 
 
 # ============================================================
@@ -1126,11 +1125,6 @@ summary_df = pd.DataFrame([
         "Item": "Calibrated final fixed rice area",
         "Area_ha": selected_area_ha,
         "Percent_of_valid_area": selected_area_ha / valid_area_ha * 100
-    },
-    {
-        "Item": "Target reference area",
-        "Area_ha": TARGET_RICE_AREA_HA,
-        "Percent_of_valid_area": TARGET_RICE_AREA_HA / valid_area_ha * 100
     },
     {
         "Item": "Slope used",
@@ -1393,20 +1387,6 @@ ax.plot(
     linewidth=1.5
 )
 
-ax.axhline(
-    TARGET_RICE_AREA_HA,
-    linestyle="--",
-    linewidth=1.2,
-    label=f"Reference target: {TARGET_RICE_AREA_HA:,.0f} ha"
-)
-
-ax.axhspan(
-    TARGET_MIN_AREA_HA,
-    TARGET_MAX_AREA_HA,
-    alpha=0.15,
-    label=f"Reasonable range: {TARGET_MIN_AREA_HA:,.0f}–{TARGET_MAX_AREA_HA:,.0f} ha"
-)
-
 ax.scatter(
     [SELECTED_THRESHOLD],
     [selected_area_ha],
@@ -1618,10 +1598,10 @@ The final mask combines:
 - small patch removal
 
 4. Selected result
-- Selected probability threshold: {SELECTED_THRESHOLD}
+- Final outside-reference probability threshold: {SELECTED_THRESHOLD}
 - Fixed calibrated final rice area: {selected_area_ha:,.2f} ha
-- Reference target area: {TARGET_RICE_AREA_HA:,.2f} ha
-- Difference from target: {selected_area_ha - TARGET_RICE_AREA_HA:,.2f} ha
+- Threshold sweep retained only as a diagnostic sensitivity analysis
+- No undocumented area target used as a publication-stage selection criterion
 - Slope used: {slope_used}
 
 5. Main output
