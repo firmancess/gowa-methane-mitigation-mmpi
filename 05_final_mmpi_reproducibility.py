@@ -52,10 +52,10 @@ try:
     from google.colab import drive
     drive.mount('/content/drive')
 except Exception:
-    print('Google Colab drive.mount tidak tersedia. Pastikan path input disesuaikan bila dijalankan lokal.')
+    print('Google Colab drive.mount is unavailable. Adjust the input paths when running locally.')
 
 # ============================================================
-# 1. PATHS — mengikuti notebook final pengguna
+# 1. PATHS — aligned with the final analysis workflow
 # ============================================================
 
 DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
@@ -151,12 +151,12 @@ def find_first(roots, patterns, required=True, label='file'):
         for pat in patterns:
             found.extend(glob.glob(os.path.join(root, '**', pat), recursive=True))
     found = sorted(set(found))
-    print(f'\nKandidat {label}:')
+    print(f'\nCandidate {label}:')
     for p in found[:10]:
         print(' -', p)
     if not found:
         if required:
-            raise FileNotFoundError(f'{label} tidak ditemukan.')
+            raise FileNotFoundError(f'{label} was not found.')
         return None
     return found[0]
 
@@ -185,7 +185,7 @@ def find_band_index(band_names, candidates, required=True):
             if c in name:
                 return i + 1
     if required:
-        raise ValueError('Band tidak ditemukan: ' + ', '.join(candidates))
+        raise ValueError('Band not found: ' + ', '.join(candidates))
     return None
 
 
@@ -351,7 +351,7 @@ def safe_blend(abs_score, local_score, mask, w_abs=0.60, w_local=0.40):
     return np.where(mask, clip_0_100(out), np.nan)
 
 
-def classify_absolute(mmpi, valid_mask):
+def classify_fixed_score(mmpi, valid_mask):
     out = np.full(mmpi.shape, 255, dtype='uint8')
     out[(mmpi >= 0) & (mmpi < 20) & valid_mask] = 1
     out[(mmpi >= 20) & (mmpi < 40) & valid_mask] = 2
@@ -421,7 +421,7 @@ def percentile_values(arr, mask, ps):
 # ============================================================
 
 if not os.path.exists(RICE2026_FINAL_10M_PATH):
-    raise FileNotFoundError('Final RF rice mask tidak ditemukan: ' + RICE2026_FINAL_10M_PATH)
+    raise FileNotFoundError('Final RF rice mask was not found: ' + RICE2026_FINAL_10M_PATH)
 
 SEARCH_DIRS = [GEE_STACK_DIR, DRIVE_ROOT]
 PREDICTOR_MEAN_PATH = find_first(
@@ -607,7 +607,7 @@ if PREDICTOR_STD_PATH is not None:
                 'Purpose': 'Percentile increasing score for variability uncertainty'
             })
     except Exception as e:
-        print('StdDev stack tidak dipakai karena error:', e)
+        print('StdDev stack was not used because of an error:', e)
 
 UNCERT = clip_0_100(UNCERT)
 
@@ -702,7 +702,7 @@ for name in ['HYDRO', 'SOIL_FILLED', 'CLIMATE', 'TOPO', 'AWD', 'FLOOD', 'UNCERT'
     locals()[name] = np.where(rice_mask_30m, arr, np.nan)
 
 valid_final = rice_mask_30m & np.isfinite(MMPI_FINAL)
-ABS_FINAL = classify_absolute(MMPI_FINAL, valid_final)
+FIXED_SCORE_FINAL = classify_fixed_score(MMPI_FINAL, valid_final)
 REL_FINAL, REL_BREAKS = classify_relative(MMPI_FINAL, valid_final)
 
 # ============================================================
@@ -724,7 +724,7 @@ core_rasters = {
 }
 for name, arr in core_rasters.items():
     write_raster(os.path.join(RASTER_DIR, name + '.tif'), arr, pred_profile)
-write_raster(os.path.join(RASTER_DIR, 'Final_MMPI_Absolute_Class_30m.tif'), ABS_FINAL, pred_profile, dtype='uint8', nodata=255)
+write_raster(os.path.join(RASTER_DIR, 'Final_MMPI_Fixed_Score_Class_30m.tif'), FIXED_SCORE_FINAL, pred_profile, dtype='uint8', nodata=255)
 write_raster(os.path.join(RASTER_DIR, 'Final_MMPI_Relative_Priority_Class_30m.tif'), REL_FINAL, pred_profile, dtype='uint8', nodata=255)
 
 # ============================================================
@@ -759,7 +759,7 @@ corr_df = pd.DataFrame({k: v[valid_final] for k, v in corr_arrays.items()}).corr
 # Class areas
 class_labels = {1:'Very low',2:'Low',3:'Moderate',4:'High',5:'Very high'}
 area_rows = []
-for ctype, carr in [('Absolute', ABS_FINAL), ('Relative priority', REL_FINAL)]:
+for ctype, carr in [('Fixed-score', FIXED_SCORE_FINAL), ('Relative priority', REL_FINAL)]:
     denom = sum(((carr == c) & valid_final).sum() for c in range(1,6))
     for c in range(1,6):
         n = int(((carr == c) & valid_final).sum())
@@ -876,7 +876,7 @@ def build_scenario(mhsi_w, raw_w, cfr_coef, uncert_coef):
 
 baseline_mhsi, baseline_raw, baseline = build_scenario(BASE_MHSI_W, BASE_RAW_W, BASE_CFR, BASE_UNCERT)
 baseline_mask = rice_mask_30m & np.isfinite(baseline)
-baseline_class = classify_absolute(baseline, baseline_mask)
+baseline_class = classify_fixed_score(baseline, baseline_mask)
 base_high_area = int(((baseline_class >= 4) & (baseline_class <= 5) & baseline_mask).sum()) * pixel_area_ha
 base_mean = float(np.nanmean(baseline[baseline_mask]))
 base_median = float(np.nanmedian(baseline[baseline_mask]))
@@ -888,7 +888,7 @@ scenario_weights_rows = []
 def add_sensitivity_row(label, component, delta, mhsi_w, raw_w, cfr_coef, uncert_coef):
     _, _, arr = build_scenario(mhsi_w, raw_w, cfr_coef, uncert_coef)
     mask = baseline_mask & np.isfinite(arr)
-    cls = classify_absolute(arr, mask)
+    cls = classify_fixed_score(arr, mask)
     high_area = int(((cls >= 4) & (cls <= 5) & mask).sum()) * pixel_area_ha
     agreement = float(np.mean(cls[mask] == baseline_class[mask]) * 100.0)
     pr = corr_pair(baseline, arr, mask, 'pearson')
@@ -907,7 +907,7 @@ def add_sensitivity_row(label, component, delta, mhsi_w, raw_w, cfr_coef, uncert
         'Delta_High_VeryHigh_area_ha': high_area - base_high_area,
         'High_VeryHigh_share_percent': high_share,
         'Delta_High_VeryHigh_share_pp': high_share - base_share,
-        'Absolute_class_agreement_percent': agreement,
+        'Fixed_score_class_agreement_percent': agreement,
         'Pearson_vs_baseline': pr,
         'Spearman_vs_baseline': sr,
         'Status': status,
@@ -971,7 +971,7 @@ sensitivity_summary_df = pd.DataFrame([
     ['Maximum absolute change in mean MMPI', float(nonbase['Delta_mean_MMPI'].abs().max())],
     ['Maximum absolute change in High + Very high area (ha)', float(nonbase['Delta_High_VeryHigh_area_ha'].abs().max())],
     ['Maximum absolute change in High + Very high share (pp)', float(nonbase['Delta_High_VeryHigh_share_pp'].abs().max())],
-    ['Minimum absolute class agreement with baseline (%)', float(nonbase['Absolute_class_agreement_percent'].min())],
+    ['Minimum fixed-score class agreement with baseline (%)', float(nonbase['Fixed_score_class_agreement_percent'].min())],
     ['Minimum Pearson correlation with baseline MMPI', float(nonbase['Pearson_vs_baseline'].min())],
     ['Minimum Spearman correlation with baseline MMPI', float(nonbase['Spearman_vs_baseline'].min())],
 ], columns=['Indicator','Result'])
@@ -983,8 +983,8 @@ sensitivity_summary_df = pd.DataFrame([
 MMPI_NO_CFR = clip_0_100(MMPI_RAW_FINAL * (1 - BASE_UNCERT * UNCERT / 100.0))
 MMPI_NO_CFR = np.where(rice_mask_30m, MMPI_NO_CFR, np.nan)
 mask_ab = valid_final & np.isfinite(MMPI_NO_CFR)
-CLASS_NO_CFR = classify_absolute(MMPI_NO_CFR, mask_ab)
-base_class_ab = classify_absolute(MMPI_FINAL, mask_ab)
+CLASS_NO_CFR = classify_fixed_score(MMPI_NO_CFR, mask_ab)
+base_class_ab = classify_fixed_score(MMPI_FINAL, mask_ab)
 no_cfr_high_area = int(((CLASS_NO_CFR >= 4) & (CLASS_NO_CFR <= 5) & mask_ab).sum()) * pixel_area_ha
 base_high_area_ab = int(((base_class_ab >= 4) & (base_class_ab <= 5) & mask_ab).sum()) * pixel_area_ha
 agreement_ab = float(np.mean(CLASS_NO_CFR[mask_ab] == base_class_ab[mask_ab]) * 100.0)
@@ -1010,7 +1010,7 @@ ablation_df = pd.DataFrame([
 ], columns=['Indicator','Result'])
 
 write_raster(os.path.join(RASTER_DIR, 'Ablation_MMPI_No_CFR_30m.tif'), MMPI_NO_CFR, pred_profile)
-write_raster(os.path.join(RASTER_DIR, 'Ablation_MMPI_No_CFR_Absolute_Class_30m.tif'), CLASS_NO_CFR, pred_profile, dtype='uint8', nodata=255)
+write_raster(os.path.join(RASTER_DIR, 'Ablation_MMPI_No_CFR_Fixed_Score_Class_30m.tif'), CLASS_NO_CFR, pred_profile, dtype='uint8', nodata=255)
 
 # ============================================================
 # 15. DIAGNOSTIC AGAINST MANUSCRIPT VALUES
@@ -1019,7 +1019,7 @@ write_raster(os.path.join(RASTER_DIR, 'Ablation_MMPI_No_CFR_Absolute_Class_30m.t
 valid_area = valid_final.sum() * pixel_area_ha
 mean_mmpi = float(np.nanmean(MMPI_FINAL[valid_final]))
 median_mmpi = float(np.nanmedian(MMPI_FINAL[valid_final]))
-high_area = int(((ABS_FINAL >= 4) & (ABS_FINAL <= 5) & valid_final).sum()) * pixel_area_ha
+high_area = int(((FIXED_SCORE_FINAL >= 4) & (FIXED_SCORE_FINAL <= 5) & valid_final).sum()) * pixel_area_ha
 
 check_df = pd.DataFrame([
     ['Valid area (ha)', valid_area, EXPECTED['Valid_area_ha'], valid_area - EXPECTED['Valid_area_ha']],
@@ -1036,7 +1036,7 @@ print('\n===== ABLATION SUMMARY =====')
 print(ablation_df.to_string(index=False))
 
 # ============================================================
-# 16. EXPORT TABLES / WORKBOOK
+# 16. EXPORT TABLES AND THE FINAL REPRODUCIBILITY WORKBOOK
 # ============================================================
 
 summary_df.to_csv(os.path.join(TABLE_DIR, 'T01_Final_MMPI_Summary_Statistics.csv'), index=False)
@@ -1121,8 +1121,9 @@ with open(report_path, 'w', encoding='utf-8') as f:
     f.write(report)
 
 print('\n============================================================')
-print('REPRODUCIBILITY RERUN SELESAI')
+print('REPRODUCIBILITY RERUN COMPLETED')
 print('Output folder :', OUT_DIR)
 print('Workbook      :', xlsx_path)
+print('GitHub file   : MMPI_FINAL_REPRODUCIBILITY_SUPPLEMENT.xlsx')
 print('Report        :', report_path)
 print('============================================================')
