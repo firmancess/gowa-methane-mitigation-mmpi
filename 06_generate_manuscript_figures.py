@@ -2,21 +2,20 @@
 Final Manuscript Figure Generation
 ==================================
 
-Generates the final 600-dpi manuscript figures from the final MMPI and rice-mask outputs. Figure labels should follow the manuscript terminology (fixed-score MMPI classes).
+Generates the final 600-dpi manuscript figures exclusively from the canonical
+publication-stage outputs. This script intentionally does not search legacy
+2024 analyses, revised-development folders, or alternative raster candidates.
 
-This file was selected from the final successful workflow in the uploaded analysis notebook.
-Superseded/failed notebook cells were intentionally excluded.
+Required upstream outputs:
+- final calibrated 2026 RF rice-field mask from Stage 2;
+- final 30 m MMPI rasters from Stage 5;
+- the Gowa administrative boundary used by the RF workflow.
+
+If a canonical input is missing, the script stops instead of silently
+substituting an older or alternative dataset.
 """
 
-# ============================================================
-# FINAL VISUALIZATION SCRIPT
-# MMPI GOWA RICE 2026
-# DPI 600 | ORDERED FIGURES | FIXED FILE SEARCH
-# ============================================================
-
-
 import os
-import glob
 import warnings
 warnings.filterwarnings("ignore")
 
@@ -30,136 +29,86 @@ from rasterio.plot import plotting_extent
 from matplotlib.colors import ListedColormap, BoundaryNorm
 from matplotlib.patches import Patch, FancyBboxPatch, FancyArrowPatch
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+
 try:
     from google.colab import drive
-    drive.mount('/content/drive')
+    drive.mount("/content/drive")
 except Exception:
     pass
 
 
 # ============================================================
-# 1. MOUNT DRIVE
-# ============================================================
-
-
-
-# ============================================================
-# 2. FOLDER SETTING
+# 1. CANONICAL INPUT AND OUTPUT PATHS
 # ============================================================
 
 DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
 
-BASE_FINAL = os.path.join(
+REPRO_DIR = os.path.join(
     DRIVE_ROOT,
-    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa_SOIL_GAPFILLED_FINAL"
+    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa_REPRODUCIBILITY_RERUN",
 )
+RASTER_DIR = os.path.join(REPRO_DIR, "Raster_Output")
+TABLE_DIR = os.path.join(REPRO_DIR, "Figure_Tables")
+FIG_DIR = os.path.join(REPRO_DIR, "Figures_DPI600_FINAL")
 
-BASE_REVISED = os.path.join(
-    DRIVE_ROOT,
-    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa_REVISED"
-)
-
-BASE_ORIGINAL = os.path.join(
-    DRIVE_ROOT,
-    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa"
-)
-
-BASE_PUBLICATION_FINAL = os.path.join(
-    DRIVE_ROOT,
-    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa_REVISED_PUBLICATION_FINAL"
-)
-
-BASE_PUBLICATION = os.path.join(
-    DRIVE_ROOT,
-    "MANUSCRIPT_FINAL_MMPI_Rice2026_Gowa_REVISED_PUBLICATION"
-)
-
-BASE_CONTINUATION = os.path.join(
-    DRIVE_ROOT,
-    "Gowa_Rice2026_MMPI_Continuation_Analysis"
-)
-
-BASE_OLD_2024 = os.path.join(
-    DRIVE_ROOT,
-    "MMPI_Mamminasata_Gowa_Sawah2024_Analysis_Output_30m"
-)
-
-BASE_OLD_30M = os.path.join(
-    DRIVE_ROOT,
-    "MMPI_Gowa_Analysis_Output_30m"
-)
-
-RASTER_DIR_FINAL = os.path.join(BASE_FINAL, "Raster_Output")
-TABLE_DIR = os.path.join(BASE_FINAL, "Tables")
-
-FIG_DIR = os.path.join(
-    BASE_FINAL,
-    "Figures_DPI600_FINAL_ORDERED_FIXED_V3"
-)
-
-os.makedirs(FIG_DIR, exist_ok=True)
 os.makedirs(TABLE_DIR, exist_ok=True)
+os.makedirs(FIG_DIR, exist_ok=True)
 
 DPI = 600
-EXPECTED_RICE_AREA_HA = 26208.20
 
-print("Output figure folder:")
+BOUNDARY_PATH = os.path.join(
+    DRIVE_ROOT,
+    "Gowa_Sentinel_2026_RF_Input",
+    "Gowa_Boundary_GAUL2015_2026.geojson",
+)
+
+RICE_MASK_10M_PATH = os.path.join(
+    DRIVE_ROOT,
+    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED",
+    "Raster_Output",
+    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif",
+)
+
+MMPI_PATH = os.path.join(RASTER_DIR, "Final_MMPI_30m.tif")
+MHSI_PATH = os.path.join(RASTER_DIR, "Final_MHSI_30m.tif")
+AWD_PATH = os.path.join(RASTER_DIR, "Final_AWD_Proxy_30m.tif")
+HYDRO_PATH = os.path.join(RASTER_DIR, "Final_Hydrology_Suitability_30m.tif")
+SOIL_PATH = os.path.join(RASTER_DIR, "Final_Soil_Suitability_GapFilled_30m.tif")
+CLIMATE_PATH = os.path.join(RASTER_DIR, "Final_Climate_Suitability_Hybrid_30m.tif")
+TOPO_PATH = os.path.join(RASTER_DIR, "Final_Topography_Suitability_Hybrid_30m.tif")
+FLOOD_PATH = os.path.join(RASTER_DIR, "Final_Continuous_Flooding_Risk_30m.tif")
+UNCERT_PATH = os.path.join(RASTER_DIR, "Final_Uncertainty_Index_30m.tif")
+
+required_paths = {
+    "Gowa boundary": BOUNDARY_PATH,
+    "Final calibrated 2026 rice mask": RICE_MASK_10M_PATH,
+    "Final MMPI": MMPI_PATH,
+    "Final MHSI": MHSI_PATH,
+    "AWD proxy": AWD_PATH,
+    "Hydrology suitability": HYDRO_PATH,
+    "Soil suitability": SOIL_PATH,
+    "Climate suitability": CLIMATE_PATH,
+    "Topography suitability": TOPO_PATH,
+    "Continuous flooding risk": FLOOD_PATH,
+    "Uncertainty index": UNCERT_PATH,
+}
+
+missing = [(label, path) for label, path in required_paths.items() if not os.path.exists(path)]
+if missing:
+    msg = "\n".join(f"- {label}: {path}" for label, path in missing)
+    raise FileNotFoundError(
+        "One or more canonical publication inputs are missing:\n"
+        + msg
+        + "\nNo legacy or alternative input will be substituted."
+    )
+
+print("Canonical figure output folder:")
 print(FIG_DIR)
 
 
 # ============================================================
-# 3. SEARCH ROOTS
+# 2. HELPER FUNCTIONS
 # ============================================================
-
-SEARCH_ROOTS_COMPONENTS = [
-    os.path.join(BASE_FINAL, "Raster_Output"),
-    BASE_FINAL,
-    os.path.join(BASE_REVISED, "Raster_Output"),
-    BASE_REVISED,
-    os.path.join(BASE_ORIGINAL, "Raster_Output"),
-    BASE_ORIGINAL,
-    os.path.join(BASE_PUBLICATION_FINAL, "Raster_Output"),
-    BASE_PUBLICATION_FINAL,
-    os.path.join(BASE_PUBLICATION, "Raster_Output"),
-    BASE_PUBLICATION,
-    os.path.join(BASE_CONTINUATION, "Raster_Output"),
-    BASE_CONTINUATION,
-    os.path.join(BASE_OLD_2024, "Raster_Output"),
-    BASE_OLD_2024,
-    BASE_OLD_30M,
-]
-
-SEARCH_ROOTS_COMPONENTS = [
-    p for p in SEARCH_ROOTS_COMPONENTS
-    if os.path.exists(p)
-]
-
-print("\nComponent search folders:")
-for p in SEARCH_ROOTS_COMPONENTS:
-    print("-", p)
-
-
-# ============================================================
-# 4. HELPER FUNCTIONS
-# ============================================================
-
-def glob_many(search_roots, patterns):
-    found = []
-
-    for root in search_roots:
-        if not os.path.exists(root):
-            continue
-
-        for pat in patterns:
-            found.extend(
-                glob.glob(
-                    os.path.join(root, "**", pat),
-                    recursive=True
-                )
-            )
-
-    return sorted(list(set(found)))
-
 
 def read_raster_float(path):
     with rasterio.open(path) as src:
@@ -172,80 +121,9 @@ def read_raster_float(path):
 
     if nodata is not None:
         arr[arr == nodata] = np.nan
-
     arr[~np.isfinite(arr)] = np.nan
 
     return arr, profile, transform, crs, extent
-
-
-def is_same_grid(path, ref_shape, ref_crs, ref_transform):
-    try:
-        with rasterio.open(path) as src:
-            if src.shape != ref_shape:
-                return False
-
-            if src.crs != ref_crs:
-                return False
-
-            if not src.transform.almost_equals(ref_transform, precision=6):
-                return False
-
-        return True
-
-    except Exception:
-        return False
-
-
-def find_raster_grid(patterns, label, ref_shape=None, ref_crs=None, ref_transform=None):
-    candidates = glob_many(SEARCH_ROOTS_COMPONENTS, patterns)
-
-    if len(candidates) == 0:
-        raise FileNotFoundError(
-            f"{label} was not found.\n"
-            f"Search patterns: {patterns}\n\n"
-            "Search folders:\n" + "\n".join(SEARCH_ROOTS_COMPONENTS)
-        )
-
-    if ref_shape is not None:
-        candidates_same_grid = [
-            p for p in candidates
-            if is_same_grid(p, ref_shape, ref_crs, ref_transform)
-        ]
-
-        if len(candidates_same_grid) == 0:
-            info = []
-
-            for p in candidates:
-                try:
-                    with rasterio.open(p) as src:
-                        info.append({
-                            "label": label,
-                            "file": os.path.basename(p),
-                            "path": p,
-                            "shape": str(src.shape),
-                            "crs": str(src.crs),
-                            "transform": str(src.transform)
-                        })
-                except Exception:
-                    pass
-
-            pd.DataFrame(info).to_csv(
-                os.path.join(TABLE_DIR, f"ERROR_{label.replace(' ', '_')}_candidate_grid_check.csv"),
-                index=False
-            )
-
-            raise FileNotFoundError(
-                f"{label} were found, but none matches the final MMPI grid.\n"
-                f"Check the candidate-file diagnostics in the Tables folder."
-            )
-
-        selected = candidates_same_grid[0]
-
-    else:
-        selected = candidates[0]
-
-    print(f"{label}: {selected}")
-    return selected
 
 
 def read_binary_mask(path):
@@ -261,197 +139,29 @@ def read_binary_mask(path):
 
     if nodata is not None:
         arr[arr == nodata] = np.nan
-
     arr[~np.isfinite(arr)] = np.nan
+    arr[arr == 255] = np.nan
 
-    # Safeguard for value 255 when it represents NoData but is not encoded as raster NoData
     vals = arr[np.isfinite(arr)]
-
     if vals.size == 0:
-        raise ValueError(f"Raster is empty: {path}")
+        raise ValueError(f"Rice-mask raster is empty: {path}")
 
-    unique_small = np.unique(vals)
-    unique_small = unique_small[:20]
-
-    if np.nanmax(vals) == 255 and np.nanmin(vals) >= 0:
-        arr[arr == 255] = np.nan
-        vals = arr[np.isfinite(arr)]
-
-    if vals.size == 0:
-        raise ValueError(f"Raster is empty after NoData cleaning: {path}")
-
-    vmax = np.nanmax(vals)
-
-    # Probability range 0-1
-    if vmax <= 1.0:
-        mask = np.where(arr >= 0.5, 1.0, np.nan)
-    else:
-        mask = np.where(arr > 0, 1.0, np.nan)
-
-    pixel_area_ha = (pixel_width * pixel_height) / 10000
-    area_ha = np.nansum(mask == 1) * pixel_area_ha
+    # The calibrated Stage-2 raster uses 0 = Non-rice, 1 = Rice, 255 = NoData.
+    mask = np.where(arr == 1, 1.0, np.nan)
+    pixel_area_ha = (pixel_width * pixel_height) / 10000.0
+    area_ha = float(np.sum(mask == 1) * pixel_area_ha)
 
     return mask, profile, transform, crs, extent, area_ha
 
 
-def score_mask_candidate(path):
-    try:
-        mask, profile, transform, crs, extent, area_ha = read_binary_mask(path)
-
-        fname = os.path.basename(path).lower()
-        folder = os.path.dirname(path).lower()
-
-        score = -abs(area_ha - EXPECTED_RICE_AREA_HA)
-
-        bonus_terms = [
-            "gowa",
-            "rice",
-            "rf",
-            "2026",
-            "calibrated",
-            "final",
-            "fixed",
-            "binary",
-            "cleaned"
-        ]
-
-        for term in bonus_terms:
-            if term in fname or term in folder:
-                score += 1500
-
-        penalty_terms = [
-            "2024",
-            "mamminasata",
-            "probability",
-            "prob",
-            "stack",
-            "input",
-            "mmpi",
-            "mhsi",
-            "awd",
-            "hydrology",
-            "soil",
-            "climate",
-            "topography",
-            "flood",
-            "uncert",
-            "absolute",
-            "relative"
-        ]
-
-        for term in penalty_terms:
-            if term in fname:
-                score -= 4000
-
-        if area_ha < 5000:
-            score -= 25000
-
-        if area_ha > 80000:
-            score -= 25000
-
-        return {
-            "path": path,
-            "file": os.path.basename(path),
-            "area_ha": area_ha,
-            "score": score
-        }
-
-    except Exception as e:
-        return {
-            "path": path,
-            "file": os.path.basename(path),
-            "area_ha": np.nan,
-            "score": -999999999,
-            "error": str(e)
-        }
-
-
-def find_best_rice_mask():
-    explicit_candidates = [
-        os.path.join(
-            DRIVE_ROOT,
-            "Gowa_Rice_RF_2026_Calibrated_Final_FIXED",
-            "Raster_Output",
-            "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif"
-        ),
-        os.path.join(
-            DRIVE_ROOT,
-            "Gowa_Rice_RF_Classification_2026",
-            "Raster_Output",
-            "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif"
-        ),
-        os.path.join(
-            DRIVE_ROOT,
-            "Gowa_Rice_RF_Classification_2026",
-            "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif"
-        ),
-        os.path.join(
-            DRIVE_ROOT,
-            "Gowa_Rice_RF_Classification_2026",
-            "Gowa_Rice_RF_2026_Binary_Cleaned_10m.tif"
-        ),
-        os.path.join(
-            BASE_FINAL,
-            "Raster_Output",
-            "FINAL_Rice2026_Binary_Mask_30m.tif"
-        ),
-        os.path.join(
-            BASE_REVISED,
-            "Raster_Output",
-            "FINAL_Rice2026_Binary_Mask_30m.tif"
-        ),
-        os.path.join(
-            BASE_ORIGINAL,
-            "Raster_Output",
-            "FINAL_Rice2026_Binary_Mask_30m.tif"
-        ),
-    ]
-
-    existing_explicit = [p for p in explicit_candidates if os.path.exists(p)]
-
-    patterns = [
-        "**/*Gowa*Rice*RF*2026*.tif",
-        "**/*Gowa*Rice*2026*Final*.tif",
-        "**/*Gowa*Rice*2026*Calibrated*.tif",
-        "**/*Rice_RF*2026*.tif",
-        "**/*Rice*RF*2026*.tif",
-        "**/*Rice2026*Binary*Mask*.tif",
-        "**/*Rice*2026*Binary*.tif",
-        "**/*Rice*2026*Cleaned*.tif",
-        "**/*Rice*2026*Final*.tif",
-        "**/*FINAL_Rice2026_Binary_Mask_30m.tif",
-    ]
-
-    auto_candidates = []
-
-    for pat in patterns:
-        auto_candidates.extend(
-            glob.glob(
-                os.path.join(DRIVE_ROOT, pat),
-                recursive=True
-            )
-        )
-
-    candidates = sorted(list(set(existing_explicit + auto_candidates)))
-
-    if len(candidates) == 0:
-        return None, None
-
-    infos = [score_mask_candidate(p) for p in candidates]
-    df = pd.DataFrame(infos).sort_values("score", ascending=False)
-
-    df.to_csv(
-        os.path.join(TABLE_DIR, "Rice_mask_candidate_check_FINAL.csv"),
-        index=False
-    )
-
-    print("\nTop rice-mask candidates:")
-    print(df.head(15)[["file", "area_ha", "score", "path"]].to_string(index=False))
-
-    best_path = df.iloc[0]["path"]
-    best_area = df.iloc[0]["area_ha"]
-
-    return best_path, best_area
+def assert_same_grid(path, ref_shape, ref_crs, ref_transform, label):
+    with rasterio.open(path) as src:
+        if src.shape != ref_shape:
+            raise ValueError(f"{label} does not match the final MMPI raster shape.")
+        if src.crs != ref_crs:
+            raise ValueError(f"{label} does not match the final MMPI CRS.")
+        if not src.transform.almost_equals(ref_transform, precision=6):
+            raise ValueError(f"{label} does not match the final MMPI grid transform.")
 
 
 def clean_map_axis(ax):
@@ -460,10 +170,8 @@ def clean_map_axis(ax):
     ax.set_xlabel("")
     ax.set_ylabel("")
     ax.grid(False)
-
     for spine in ax.spines.values():
         spine.set_visible(False)
-
     ax.set_aspect("equal", adjustable="box")
 
 
@@ -472,7 +180,7 @@ def plot_boundary(ax, gdf, linewidth=0.8):
         ax=ax,
         color="black",
         linewidth=linewidth,
-        zorder=10
+        zorder=10,
     )
 
 
@@ -482,7 +190,7 @@ def get_admin_extent(gdf, buffer_m=1200):
         minx - buffer_m,
         maxx + buffer_m,
         miny - buffer_m,
-        maxy + buffer_m
+        maxy + buffer_m,
     )
 
 
@@ -495,79 +203,33 @@ def apply_extent(ax, extent_tuple):
 def add_horizontal_colorbar(fig, ax, im, label, ticks=[0, 50, 100]):
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("bottom", size="4.2%", pad=0.12)
-
     cbar = fig.colorbar(
         im,
         cax=cax,
         orientation="horizontal",
-        ticks=ticks
+        ticks=ticks,
     )
-
     cbar.set_label(label, fontsize=7, labelpad=2)
     cbar.ax.tick_params(labelsize=6, length=2, pad=1)
-
     return cbar
 
 
 def save_fig(fig, filename, pad=0.08):
     out_path = os.path.join(FIG_DIR, filename)
-
     fig.savefig(
         out_path,
         dpi=DPI,
         bbox_inches="tight",
-        pad_inches=pad
+        pad_inches=pad,
     )
-
     plt.show()
     print("Saved:", out_path)
-
     return out_path
 
 
 # ============================================================
-# 5. BOUNDARY
+# 3. LOAD CANONICAL FINAL MMPI AND COMPONENTS
 # ============================================================
-
-boundary_candidates = [
-    os.path.join(DRIVE_ROOT, "Gowa_Sentinel_2026_RF_Input", "Gowa_Boundary_GAUL2015_2026.geojson"),
-    os.path.join(BASE_FINAL, "Gowa_Boundary_GAUL2015_2026.geojson"),
-    os.path.join(BASE_REVISED, "Gowa_Boundary_GAUL2015_2026.geojson"),
-    os.path.join(BASE_ORIGINAL, "Gowa_Boundary_GAUL2015_2026.geojson"),
-    os.path.join(DRIVE_ROOT, "MMPI_Gowa", "non_GEE", "Gowa_boundary_GADM41.geojson"),
-]
-
-boundary_candidates += glob.glob(
-    os.path.join(DRIVE_ROOT, "**", "*Gowa*Boundary*.geojson"),
-    recursive=True
-)
-
-boundary_candidates += glob.glob(
-    os.path.join(DRIVE_ROOT, "**", "*Gowa*boundary*.geojson"),
-    recursive=True
-)
-
-boundary_candidates = sorted(list(set([p for p in boundary_candidates if os.path.exists(p)])))
-
-if len(boundary_candidates) == 0:
-    raise FileNotFoundError("Gowa boundary was not found.")
-
-BOUNDARY_PATH = boundary_candidates[0]
-print("\nGowa boundary:", BOUNDARY_PATH)
-
-
-# ============================================================
-# 6. LOAD FINAL MMPI AND MHSI FIRST
-# ============================================================
-
-MMPI_PATH = find_raster_grid(
-    [
-        "Final MMPI 30m.tif",
-        "FINAL_Gowa_Rice2026_MMPI_REVISED_30m.tif",
-        "*MMPI*REVISED*30m*.tif"
-    ],
-    label="MMPI final"
-)
 
 MMPI, profile, transform, crs, raster_extent = read_raster_float(MMPI_PATH)
 
@@ -575,114 +237,19 @@ ref_shape = MMPI.shape
 ref_crs = crs
 ref_transform = transform
 
-MHSI_PATH = find_raster_grid(
-    [
-        "Final MHSI 30m.tif",
-        "FINAL_Gowa_Rice2026_MHSI_REVISED_30m.tif",
-        "*MHSI*REVISED*30m*.tif"
-    ],
-    label="MHSI final",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
+for label, path in [
+    ("MHSI", MHSI_PATH),
+    ("AWD proxy", AWD_PATH),
+    ("Hydrology suitability", HYDRO_PATH),
+    ("Soil suitability", SOIL_PATH),
+    ("Climate suitability", CLIMATE_PATH),
+    ("Topography suitability", TOPO_PATH),
+    ("Continuous flooding risk", FLOOD_PATH),
+    ("Uncertainty index", UNCERT_PATH),
+]:
+    assert_same_grid(path, ref_shape, ref_crs, ref_transform, label)
 
 MHSI, _, _, _, _ = read_raster_float(MHSI_PATH)
-
-valid_mask = np.isfinite(MMPI)
-
-print("\nMMPI final area check:")
-print("Valid MMPI pixels:", int(np.sum(valid_mask)))
-print("Valid MMPI area ha:", round(np.sum(valid_mask) * 0.09, 2))
-
-
-# ============================================================
-# 7. LOAD COMPONENTS FROM SOURCE FOLDERS
-# ============================================================
-
-AWD_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_AWD_Proxy_30m.tif",
-        "*AWD*Proxy*30m*.tif",
-        "*AWD*30m*.tif"
-    ],
-    label="AWD proxy",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-HYDRO_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_Hydrology_Suitability_30m.tif",
-        "*Hydrology*Suitability*30m*.tif"
-    ],
-    label="Hydrology suitability",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-SOIL_PATH = find_raster_grid(
-    [
-        "Final Soil suitability gap filled 30m.tif",
-        "*Soil*suitability*gap*filled*30m*.tif",
-        "FINAL_Gowa_Rice2026_Soil_Suitability_30m.tif",
-        "*Soil*Suitability*30m*.tif"
-    ],
-    label="Soil suitability",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-CLIMATE_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_Climate_Suitability_REVISED_30m.tif",
-        "*Climate*Suitability*REVISED*30m*.tif",
-        "*Climate*Suitability*30m*.tif"
-    ],
-    label="Climate suitability",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-TOPO_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_Topography_Suitability_REVISED_30m.tif",
-        "*Topography*Suitability*REVISED*30m*.tif",
-        "*Topography*Suitability*30m*.tif"
-    ],
-    label="Topography suitability",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-FLOOD_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_Continuous_Flooding_Risk_30m.tif",
-        "*Continuous*Flooding*Risk*30m*.tif",
-        "*Flooding*Risk*30m*.tif"
-    ],
-    label="Continuous flooding risk",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
-UNCERT_PATH = find_raster_grid(
-    [
-        "FINAL_Gowa_Rice2026_Uncertainty_Index_30m.tif",
-        "*Uncertainty*Index*30m*.tif"
-    ],
-    label="Uncertainty index",
-    ref_shape=ref_shape,
-    ref_crs=ref_crs,
-    ref_transform=ref_transform
-)
-
 AWD, _, _, _, _ = read_raster_float(AWD_PATH)
 HYDRO, _, _, _, _ = read_raster_float(HYDRO_PATH)
 SOIL, _, _, _, _ = read_raster_float(SOIL_PATH)
@@ -691,42 +258,34 @@ TOPO, _, _, _, _ = read_raster_float(TOPO_PATH)
 FLOOD, _, _, _, _ = read_raster_float(FLOOD_PATH)
 UNCERT, _, _, _, _ = read_raster_float(UNCERT_PATH)
 
+valid_mask = np.isfinite(MMPI)
+
+pixel_area_ha_30m = abs(transform.a * transform.e) / 10000.0
+valid_area_ha = float(np.sum(valid_mask) * pixel_area_ha_30m)
+
+print("\nFinal MMPI area check:")
+print("Valid MMPI pixels:", int(np.sum(valid_mask)))
+print("Valid MMPI area (ha):", round(valid_area_ha, 2))
+
 
 # ============================================================
-# 8. FIND RICE MASK FOR FIGURE 1
+# 4. LOAD THE EXACT FINAL 10 m RICE MASK FOR FIGURE 1
 # ============================================================
 
-best_rice_path, best_rice_area = find_best_rice_mask()
+(
+    rice_fig1_mask,
+    _,
+    _,
+    rice_fig1_crs,
+    rice_fig1_extent,
+    rice_area_shown,
+) = read_binary_mask(RICE_MASK_10M_PATH)
 
-if best_rice_path is None:
-    print("\nThe RF rice mask was not found. Figure 1 uses the valid MMPI mask as a fallback.")
-    rice_fig1_mask = np.where(valid_mask, 1.0, np.nan)
-    rice_fig1_extent = raster_extent
-    rice_fig1_crs = crs
-    rice_fig1_label = "Valid rice-field analysis mask 2026"
-    rice_area_shown = np.sum(valid_mask) * 0.09
-else:
-    diff_pct = abs(best_rice_area - EXPECTED_RICE_AREA_HA) / EXPECTED_RICE_AREA_HA * 100
+rice_fig1_label = "RF-derived rice-field mask 2026"
 
-    print("\nSelected rice mask:")
-    print(best_rice_path)
-    print("Candidate area (ha):", round(best_rice_area, 2))
-    print("Difference from target (%):", round(diff_pct, 2))
-
-    if diff_pct > 35:
-        print("\nCandidate area is too far from the expected value. Figure 1 uses the valid MMPI mask as a fallback.")
-        rice_fig1_mask = np.where(valid_mask, 1.0, np.nan)
-        rice_fig1_extent = raster_extent
-        rice_fig1_crs = crs
-        rice_fig1_label = "Valid rice-field analysis mask 2026"
-        rice_area_shown = np.sum(valid_mask) * 0.09
-    else:
-        rice_fig1_mask, _, _, rice_fig1_crs, rice_fig1_extent, rice_area_shown = read_binary_mask(best_rice_path)
-        rice_fig1_label = "RF-derived rice-field mask 2026"
-
-print("\nFigure 1 mask used:")
-print(rice_fig1_label)
-print("Area shown ha:", round(rice_area_shown, 2))
+print("\nFigure 1 mask:")
+print(RICE_MASK_10M_PATH)
+print("Rice area shown (ha):", round(rice_area_shown, 2))
 
 
 # ============================================================

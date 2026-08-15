@@ -31,17 +31,19 @@ import rasterio
 # 1. INPUT FINAL RF CLASSIFICATION
 # ============================================================
 
-INPUT_RASTER = (
-    "/content/drive/MyDrive/"
-    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED/"
-    "Raster_Output/"
-    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif"
+DRIVE_ROOT = os.environ.get("MMPI_DRIVE_ROOT", "/content/drive/MyDrive")
+
+INPUT_RASTER = os.path.join(
+    DRIVE_ROOT,
+    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED",
+    "Raster_Output",
+    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED_10m.tif",
 )
 
-OUTPUT_DIR = (
-    "/content/drive/MyDrive/"
-    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED/"
-    "AcATaMa_Validation"
+OUTPUT_DIR = os.path.join(
+    DRIVE_ROOT,
+    "Gowa_Rice_RF_2026_Calibrated_Final_FIXED",
+    "AcATaMa_Validation",
 )
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -63,7 +65,7 @@ OUTPUT_CSV = os.path.join(
 # Final RF input raster:
 # 0   = Non-rice
 # 1   = Rice
-# 255 = NoData / luar area valid
+# 255 = NoData / outside the valid analysis area
 
 INPUT_NON_RICE = 0
 INPUT_RICE = 1
@@ -147,7 +149,7 @@ with rasterio.open(OUTPUT_TIF, "w", **profile) as dst:
         {
             CLASS_NON_RICE: (220, 220, 220, 255),  # gray = non-rice
             CLASS_RICE: (0, 150, 70, 255),         # green = rice
-            NODATA_VALUE: (255, 255, 255, 0)       # transparan = NoData
+            NODATA_VALUE: (255, 255, 255, 0)       # transparent = NoData
         }
     )
 

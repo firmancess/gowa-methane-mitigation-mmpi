@@ -116,13 +116,6 @@ RICE_2024_MASK_PATH = os.path.join(
     "05_Sawah_2024_Gowa_binary_mask_aligned_to_MMPI_30m.tif"
 )
 
-# Fallback if the final mask is not found
-SAWAH_2024_ORIGINAL_PATH = os.path.join(
-    DRIVE_ROOT,
-    "InputTiff",
-    "Sawah_2024.tif"
-)
-
 print("Folder Sentinel :", SENTINEL_DIR)
 print("Output          :", OUT_DIR)
 print("RF stack single :", RF_STACK_SINGLE_PATH)
@@ -701,30 +694,14 @@ print("\nValid feature pixel:", int(valid_feature_mask.sum()))
 # 8. READ 2024 RICE DATA AS POSITIVE SEED
 # ============================================================
 
-if os.path.exists(RICE_2024_MASK_PATH):
-    seed_path = RICE_2024_MASK_PATH
-
-elif os.path.exists(SAWAH_2024_ORIGINAL_PATH):
-    seed_path = SAWAH_2024_ORIGINAL_PATH
-
-else:
-    candidates = find_file(
-        DRIVE_ROOT,
-        [
-            "05_Sawah_2024_Gowa_binary_mask_aligned_to_MMPI_30m.tif",
-            "Sawah_2024.tif",
-            "*Sawah_2024*.tif"
-        ]
+if not os.path.exists(RICE_2024_MASK_PATH):
+    raise FileNotFoundError(
+        "The canonical 2024 rice-reference raster was not found:\n"
+        + RICE_2024_MASK_PATH
+        + "\nThe publication workflow does not substitute alternate 2024 rasters."
     )
 
-    print("\nCandidate 2024 rice datasets:")
-    for c in candidates[:20]:
-        print("-", c)
-
-    if len(candidates) == 0:
-        raise FileNotFoundError("The 2024 rice dataset was not found.")
-
-    seed_path = candidates[0]
+seed_path = RICE_2024_MASK_PATH
 
 print("\n2024 rice dataset used as the positive seed:")
 print(seed_path)
