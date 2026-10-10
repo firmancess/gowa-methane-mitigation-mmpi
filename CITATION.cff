@@ -6,6 +6,7 @@ version: 1.0.0
 date-released: 2026-08-15
 license: MIT
 repository-code: "https://github.com/firmancess/gowa-methane-mitigation-mmpi"
+doi: "10.5281/zenodo.21950618"
 authors:
   - family-names: Syakur
     given-names: Ahmad
